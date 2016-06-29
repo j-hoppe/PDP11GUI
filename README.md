@@ -1,9 +1,8 @@
 # PDP11GUI
 PDP11GUI is an integrated development environment (IDE) for PDP-11’s, running under MS Windows.
 
-It is intended as a tool to explore and repair PDP-11's.
-
-Communicates with a physical PDP-11 or SimH over console interface. With this basic interface, lots of functions are realized:
+It is intended as a tool to explore and repair PDP-11's. 
+Communication with a physical PDP-11 or SimH goes over serial console. With this basic interface, lots of functions are realized:
 
 * You can inspect memory and CPU and device registers
 * Registers are fully documented, even bitwise.

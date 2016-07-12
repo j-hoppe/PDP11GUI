@@ -1,6 +1,26 @@
+unit Pdp11MMUU ;
+{
+   Copyright (c) 2016, Joerg Hoppe
+   j_hoppe@t-online.de, www.retrocmp.com
 
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
 
-unit Pdp11MMUU ; 
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   JOERG HOPPE BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
+
 
 // Simulation der Memory Manament Unit einer PDP-11
 // (11/44, 11/70).
@@ -24,14 +44,14 @@ unit Pdp11MMUU ;
 // Funktioneit für 18 und 22 Bit PDP-11,
 // Steuerung durch ThePhysicalAddressWidth.
 
-interface 
+interface
 
-uses 
-  Windows, Classes, SysUtils, 
-  AddressU, 
-  MemoryCellU ; 
+uses
+  Windows, Classes, SysUtils,
+  AddressU,
+  MemoryCellU ;
 
-type 
+type
 
   // je nach Run-Mode gilt eine andere memorymap
   // ordinal Werte wie in PSW<15:14>
@@ -40,17 +60,17 @@ type
       cpumodeSupervisor, // 1
       cpumodeIllegal, // 2
       cpumodeUser // 3
-    ) ; 
+    ) ;
 
   // je nach Instruction fetch/data access gilt eine andere memorymap
-  TPdp11MmuIDMode = ( 
-      idmodeInstruction, 
-      idmodeData 
-    ) ; 
+  TPdp11MmuIDMode = (
+      idmodeInstruction,
+      idmodeData
+    ) ;
 
 
-  TPdp11Mmu = class(TObject) 
-    private 
+  TPdp11Mmu = class(TObject)
+    private
       // Speicherzellen der simulierten PDP-11, die relevant für die MMU sind
       memorycellgroup: TMemoryCellGroup ;
 
@@ -99,12 +119,12 @@ type
 
       function Virtual2Physical(addr_v: TMemoryAddress; cpumode: TPdp11MmuCpuMode ; idmode: TPdp11MmuIDMode): TMemoryAddress ;
       function Virtual2PhysicalData(addr_v: TMemoryAddress): TMemoryAddress ;
-      function Virtual2PhysicalInstruction(addr_v: TMemoryAddress): TMemoryAddress ; 
+      function Virtual2PhysicalInstruction(addr_v: TMemoryAddress): TMemoryAddress ;
 
       // das PSW auffrischen, sync mit anderen memorycells
       // eigene Function, da es sich wahrscheinlich viel öfter ändert
       // als die MMU Einstellungen
-      procedure ExamineCpuMode ; 
+      procedure ExamineCpuMode ;
       // die MMR0, MMR3 und PAR[] auffrischen, sync mit anderen memorycelles
       procedure ExamineMMU ;
 
@@ -168,16 +188,16 @@ constructor TPdp11Mmu.Create(memorycellgroups: TMemoryCellgroups) ;
       memorycellgroup.Add(iopagebase + _12200 + 2 * idx) ; // Supervisor Instruction PDR
       // muss sortiert werden für optimierten Zugriff
     end{ "for idx" } ;
-*)     
-  end { "constructor TPdp11Mmu.Create" } ; 
+*)
+  end { "constructor TPdp11Mmu.Create" } ;
 
 
-destructor TPdp11Mmu.Destroy ; 
-  begin 
-    memorycellgroup.Free  ; 
+destructor TPdp11Mmu.Destroy ;
+  begin
+    memorycellgroup.Free  ;
     inherited  ;
 
-  end ; 
+  end ;
 
 
   // ist die MMU gerade auf 16, 18 oder 22 Bit physical eingestellt?
@@ -197,169 +217,169 @@ end;
 // result: 22bit-addr
 // i_space: I/D-flag true, wenn zugriff durch PC, sonst false
 function TPdp11Mmu.Virtual2Physical(addr_v: TMemoryAddress; cpumode: TPdp11MmuCpuMode ; idmode: TPdp11MmuIDMode): TMemoryAddress ;
-  var 
-    activePageField: dword ; 
-    displacement: dword ; 
+  var
+    activePageField: dword ;
+    displacement: dword ;
     pageAddressField: dword ; // address field from par[..,..]
-    curpdr: dword ; 
-    expansiondirection: boolean ; 
+    curpdr: dword ;
+    expansiondirection: boolean ;
     pagelen: dword ; // in bytes
-  begin 
-    assert(addr_v.mat = matVirtual) ; 
+  begin
+    assert(addr_v.mat = matVirtual) ;
     result.mat := getPhysicalAddressType ;
     if  addr_v.val >= $10000 then
       result.val := MEMORYCELL_ILLEGALVAL
     else if addr_v.val >= _160000 then // iopage!
       result.val := addr_v.val - _160000 + PhysicalIopageBaseAddr(result.mat)  // upper 8K auf 22 bit addr space
-    else if not EnableRelocation then 
-      result.val := addr_v.val 
-    else begin 
-      if not EnableDSpace[cpumode] then 
+    else if not EnableRelocation then
+      result.val := addr_v.val
+    else begin
+      if not EnableDSpace[cpumode] then
         idmode := idmodeInstruction ; // Daae Space  := Instruction Space
 
       activePageField := (addr_v.val shr 13) and 7 ; // bits 15..13 = active page field
       displacement := addr_v.val and $1777 ; // lower 13 bit erhalten
-      pageAddressField := PAR[cpumode,idmode,activePageField] ; 
-      curpdr := PDR[cpumode,idmode,activePageField] ; 
+      pageAddressField := PAR[cpumode,idmode,activePageField] ;
+      curpdr := PDR[cpumode,idmode,activePageField] ;
       expansiondirection := (curpdr and 8) <> 0 ;
-      if expansiondirection then 
+      if expansiondirection then
         raise Exception.CreateFmt('Virtual2Physical: Cannnot handle downward expansion in[%d,%d,%d]',
-                [ord(cpumode), ord(idmode), activePageField]) ; 
+                [ord(cpumode), ord(idmode), activePageField]) ;
 
       pagelen := 64 * ((curpdr shr 8) and $7f ); // bit 14..8 in 32 words
       // displacement ist 13 bit, pagelen = 128*64 =13 bits
-      if displacement >= pagelen then 
-        result.val := MEMORYCELL_ILLEGALVAL 
-      else 
-        result.val := (pageAddressField shl 6) + displacement ; 
+      if displacement >= pagelen then
+        result.val := MEMORYCELL_ILLEGALVAL
+      else
+        result.val := (pageAddressField shl 6) + displacement ;
       // Addr ungültig wegen page len?
-    end { "if not EnableRelocation ... ELSE" } ; 
-  end { "function TPdp11Mmu.Virtual2Physical" } ; 
+    end { "if not EnableRelocation ... ELSE" } ;
+  end { "function TPdp11Mmu.Virtual2Physical" } ;
 
 
 
 //
-function TPdp11Mmu.Virtual2PhysicalData(addr_v: TMemoryAddress): TMemoryAddress ; 
-  begin 
-    result := Virtual2Physical(addr_v, curCpuMode, idmodeData) ; 
-  end ; 
+function TPdp11Mmu.Virtual2PhysicalData(addr_v: TMemoryAddress): TMemoryAddress ;
+  begin
+    result := Virtual2Physical(addr_v, curCpuMode, idmodeData) ;
+  end ;
 
 
-function TPdp11Mmu.Virtual2PhysicalInstruction(addr_v: TMemoryAddress): TMemoryAddress ; 
+function TPdp11Mmu.Virtual2PhysicalInstruction(addr_v: TMemoryAddress): TMemoryAddress ;
 // mode: kernel/user/supervisor
 // access = fetch/data
-  begin 
-    result := Virtual2Physical(addr_v, curCpuMode, idmodeInstruction) ; 
-  end ; 
+  begin
+    result := Virtual2Physical(addr_v, curCpuMode, idmodeInstruction) ;
+  end ;
 
 
 
 // einzelne memorycell auslesen und Datenstruktur aktualisieren
-procedure TPdp11Mmu.evalMemoryCell(mc: TMemoryCell) ; 
+procedure TPdp11Mmu.evalMemoryCell(mc: TMemoryCell) ;
   var
      iopagebase: dword ;
     idx: integer ;
   begin
     iopagebase := PhysicalIopageBaseAddr(getPhysicalAddressType) ;
-    with mc do begin 
+    with mc do begin
       if addr.val = (iopagebase + _17776) then begin // PSW
         curCpuMode := TPdp11MmuCpuMode(pdp_value shr 14) ; // bit 15,14 sind der Mode
       end else if addr.val = (iopagebase + _17572) then begin // MMR0
-        EnableRelocation := (pdp_value and $01) <> 0 ; 
+        EnableRelocation := (pdp_value and $01) <> 0 ;
       end else if addr.val = (iopagebase + _12516) then begin // mmr3
-        EnableDSpace[cpumodeUser] := (pdp_value and $01) <> 0 ; 
-        EnableDSpace[cpumodeSupervisor] := (pdp_value and $02) <> 0 ; 
-        EnableDSpace[cpumodeKernel] := (pdp_value and $04) <> 0 ; 
-        Mapping22Bit := (pdp_value and $10) <> 0 ; 
-        UnibusRelocation := (pdp_value and $20) <> 0 ; 
-      end else begin 
+        EnableDSpace[cpumodeUser] := (pdp_value and $01) <> 0 ;
+        EnableDSpace[cpumodeSupervisor] := (pdp_value and $02) <> 0 ;
+        EnableDSpace[cpumodeKernel] := (pdp_value and $04) <> 0 ;
+        Mapping22Bit := (pdp_value and $10) <> 0 ;
+        UnibusRelocation := (pdp_value and $20) <> 0 ;
+      end else begin
         idx := (addr.val div 2) and $07 ; // bits 1..3 bilden register index 0..7
         if (addr.val >= (PhysicalIopageBaseAddr(getPhysicalAddressType) + _17660))
                 and (addr.val < (PhysicalIopageBaseAddr(getPhysicalAddressType) + _17660+ 16)) then // User Data PAR
-          PAR[cpumodeUser, idmodeData, idx] := pdp_value 
+          PAR[cpumodeUser, idmodeData, idx] := pdp_value
         else if (addr.val >= (iopagebase + _17620))
                 and (addr.val < (iopagebase + _17620+ 16)) then // User Data PDR
-          PDR[cpumodeUser, idmodeData, idx] := pdp_value 
+          PDR[cpumodeUser, idmodeData, idx] := pdp_value
         else if (addr.val >= (iopagebase + _17640))
                 and (addr.val < (iopagebase + _17640+ 16)) then  // User Instruction PAR
-          PAR[cpumodeUser, idmodeInstruction, idx] := pdp_value 
+          PAR[cpumodeUser, idmodeInstruction, idx] := pdp_value
         else if (addr.val >= (iopagebase + _17600))
                 and (addr.val < (iopagebase + _17600 + 16)) then  // User Instruction PDR
-          PDR[cpumodeUser, idmodeInstruction, idx] := pdp_value 
+          PDR[cpumodeUser, idmodeInstruction, idx] := pdp_value
 
         else if (addr.val >= (iopagebase + _12360))
                 and (addr.val < (iopagebase + _12360+ 16)) then // Kernel Data PAR
-          PAR[cpumodeKernel, idmodeData, idx] := pdp_value 
+          PAR[cpumodeKernel, idmodeData, idx] := pdp_value
         else if (addr.val >= (iopagebase + _12320))
                 and (addr.val < (iopagebase + _12320+ 16)) then // Kernel Data PDR
-          PDR[cpumodeKernel, idmodeData, idx] := pdp_value 
+          PDR[cpumodeKernel, idmodeData, idx] := pdp_value
         else if (addr.val >= (iopagebase + _12340))
                 and (addr.val < (iopagebase + _12340+ 16)) then // Kernel Instruction PAR
-          PAR[cpumodeUser, idmodeInstruction, idx] := pdp_value 
+          PAR[cpumodeUser, idmodeInstruction, idx] := pdp_value
         else if (addr.val >= (iopagebase + _12340))
                 and (addr.val < (iopagebase + _12340+ 16)) then // Kernel Instruction PDR
-          PDR[cpumodeUser, idmodeInstruction, idx] := pdp_value 
+          PDR[cpumodeUser, idmodeInstruction, idx] := pdp_value
 
         else if (addr.val >= iopagebase + _12260)
                 and (addr.val < (iopagebase + _12260+ 16)) then // Supervisor Data PAR
-          PAR[cpumodeSupervisor, idmodeData, idx] := pdp_value 
+          PAR[cpumodeSupervisor, idmodeData, idx] := pdp_value
         else if (addr.val >= (iopagebase + _12260))
                 and (addr.val < (iopagebase + _12260+ 16)) then // Supervisor Data PDR
-          PDR[cpumodeSupervisor, idmodeData, idx] := pdp_value 
+          PDR[cpumodeSupervisor, idmodeData, idx] := pdp_value
         else if (addr.val >= (iopagebase + _12240))
                 and (addr.val < (iopagebase + _12240+ 16)) then // Supervisor Instruction PAR
-          PAR[cpumodeSupervisor, idmodeInstruction, idx] := pdp_value 
+          PAR[cpumodeSupervisor, idmodeInstruction, idx] := pdp_value
         else if (addr.val >= (iopagebase + _12240))
                 and (addr.val < (iopagebase + _12240+ 16)) then  // Supervisor Instruction PDR
-          PDR[cpumodeSupervisor, idmodeInstruction, idx] := pdp_value ; 
+          PDR[cpumodeSupervisor, idmodeInstruction, idx] := pdp_value ;
 
-      end{ "if addr.val = (ThePhysicalAddressWidth + _12516) ... ELSE" } ; 
-    end{ "with mc" } ; 
-  end{ "procedure TPdp11Mmu.evalMemoryCell" } ; 
+      end{ "if addr.val = (ThePhysicalAddressWidth + _12516) ... ELSE" } ;
+    end{ "with mc" } ;
+  end{ "procedure TPdp11Mmu.evalMemoryCell" } ;
 
 
 // memorycells auslesen und Datenstruktur aktualisieren
-procedure TPdp11Mmu.evalMemoryCells ; 
-  var i: integer ; 
-  begin 
+procedure TPdp11Mmu.evalMemoryCells ;
+  var i: integer ;
+  begin
     // schleife über alle memorycell
-    for i := 0 to memorycellgroup.Count-1 do begin 
-      evalMemoryCell(memorycellgroup.Cell(i)) ; 
-    end ; 
+    for i := 0 to memorycellgroup.Count-1 do begin
+      evalMemoryCell(memorycellgroup.Cell(i)) ;
+    end ;
 
-  end ; 
+  end ;
 
 
 // das PSW auffrischen, sync mit anderen memorycells
 // eigene Function, da es sich wahrscheinlich viel öfter ändert
 // als die MMU Einstellungen
-procedure TPdp11Mmu.ExamineCpuMode ; 
-  begin 
+procedure TPdp11Mmu.ExamineCpuMode ;
+  begin
     // nur PSW updaten
     psw_memorycell.Examine ;
-    (memorycellgroup.Collection as TMemoryCellgroups).SyncMemoryCells(psw_memorycell); 
-    evalMemoryCell(psw_memorycell) ; 
-  end ; 
+    (memorycellgroup.Collection as TMemoryCellgroups).SyncMemoryCells(psw_memorycell);
+    evalMemoryCell(psw_memorycell) ;
+  end ;
 
 // die PSW, MMR0, MMR3 und PAR[] auffrischen, sync mit anderen memorycells
-procedure TPdp11Mmu.ExamineMMU ; 
-  begin 
+procedure TPdp11Mmu.ExamineMMU ;
+  begin
     memorycellgroup.Examine(false, true); // update all, long list
     // SyncMemoryCells() wird schon gemacht
-    evalMemoryCells ; 
-  end ; 
+    evalMemoryCells ;
+  end ;
 
 // wird aufgerufen, wenn PSW, oder die MMU register von aussen
 // durch TMemoryCellGroups.SyncMemoryCells() geändert werden.
-procedure TPdp11Mmu.MemoryCellChange(Sender: TObject ; mc: TMemoryCell) ; 
-  begin 
-    evalMemoryCell(mc); 
-    if assigned(OnMMUChanged) then 
-      OnMMUChanged(self) ; 
-  end ; 
+procedure TPdp11Mmu.MemoryCellChange(Sender: TObject ; mc: TMemoryCell) ;
+  begin
+    evalMemoryCell(mc);
+    if assigned(OnMMUChanged) then
+      OnMMUChanged(self) ;
+  end ;
 
 
 
-end{ "unit Pdp11MMUU" } . 
+end{ "unit Pdp11MMUU" } .
 
 

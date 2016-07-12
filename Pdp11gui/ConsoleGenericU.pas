@@ -1,4 +1,25 @@
-unit ConsoleGenericU; 
+unit ConsoleGenericU;
+{
+   Copyright (c) 2016, Joerg Hoppe
+   j_hoppe@t-online.de, www.retrocmp.com
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   JOERG HOPPE BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
 
 {
   Abstrakte Basisklasse für die Ansteuerung verschiedener PDP-11-Consol-Terminals.
@@ -14,31 +35,31 @@ unit ConsoleGenericU;
   Deposit - Memory schreiben
 }
 
-interface 
+interface
 
-uses 
-  Classes, Windows, Sysutils, 
-  ExtCtrls, 
-  FormTerminalU, 
-  SerialIoHubU, 
-  AddressU, 
-  MemoryCellU, 
-  Pdp11MMuU, 
-  FormBusyU ; 
+uses
+  Classes, Windows, Sysutils,
+  ExtCtrls,
+  FormTerminalU,
+  SerialIoHubU,
+  AddressU,
+  MemoryCellU,
+  Pdp11MMuU,
+  FormBusyU ;
 
 
 
-type 
+type
 
   // mit welcher Art PDP-11 soll kommuniziert werden?
-  TConsoleType = ( 
-      consoleNone, 
-      consoleSelftest11M9301, 
-      consoleSelftest11M9312, 
-      consoleSelftest1144, 
-      consoleSelftest1144v340c, 
-      consoleSelftest11ODT16, 
-      consoleSelftest11ODT18, 
+  TConsoleType = (
+      consoleNone,
+      consoleSelftest11M9301,
+      consoleSelftest11M9312,
+      consoleSelftest1144,
+      consoleSelftest1144v340c,
+      consoleSelftest11ODT16,
+      consoleSelftest11ODT18,
       consoleSelftest11ODT22,
       consoleSelftest11ODTK1630,
       consolePDP11M9301,
@@ -50,63 +71,63 @@ type
       consolePDP11ODT22,
       consolePDP11ODTK1630, // robotron A6402 CPU K1630
       consoleSimH
-    ) { "TYPE TConsoleType" } ; 
+    ) { "TYPE TConsoleType" } ;
 
-  TConsoleAnswerPhraseType = (phNone, 
+  TConsoleAnswerPhraseType = (phNone,
       phPrompt, // Prompt erkannt
       phHalt, // CPU halt erkannt
       phExamine, // Anwort auf Examine, auch Unibus timeout
       phOtherLine // nicht-interpretierte Zeile
-    ) ; 
+    ) ;
 
 // Record, der eine geparste Antwort enthält
 // Union.
-  TConsoleAnswerPhrase = class(TCollectionItem) 
-    public 
-      phrasetype:TConsoleAnswerPhraseType ; 
+  TConsoleAnswerPhrase = class(TCollectionItem)
+    public
+      phrasetype:TConsoleAnswerPhraseType ;
       rawtext: string ; // ungeparst, wie empfangen
 
       // wenn phHalt:
-      haltaddr: TMemoryAddress ; 
+      haltaddr: TMemoryAddress ;
       // wenn phExamine
-      examineaddr: TMemoryAddress ; 
-      examinevalue: dword ; 
+      examineaddr: TMemoryAddress ;
+      examinevalue: dword ;
 
       // wenn phOtherLine
-      otherline: shortstring ; 
+      otherline: shortstring ;
 
-      function AsText: string ; 
-    end{ "TYPE TConsoleAnswerPhrase = class(TCollectionItem)" } ; 
+      function AsText: string ;
+    end{ "TYPE TConsoleAnswerPhrase = class(TCollectionItem)" } ;
 
 
   // Scanner, umn den Output der PDP zu analysieren
-  EConsoleScannerInputIncomplete = class(Exception) ; 
+  EConsoleScannerInputIncomplete = class(Exception) ;
   // Wenn Parseversuche kein Ergebnis erzeugen. kein Fehler
-  EConsoleScannerUnknownExpression = class(Exception) ; 
+  EConsoleScannerUnknownExpression = class(Exception) ;
 
-  TConsoleScanner = class(TObject) 
-    public 
+  TConsoleScanner = class(TObject)
+    public
       CurInputLine: string ; // das parst und verkürzt er!
       nxtcharidx: integer ; // nächstes unverarbeites Zeichen aus CurInputLine
-      CurSymTxt: string ; 
+      CurSymTxt: string ;
       CurSymType: integer ; // eines der symtype*
 
-      marked_nxtcharidx: integer ; 
-      marked_CurSymTxt: string ; 
-      marked_CurSymType: integer ; 
+      marked_nxtcharidx: integer ;
+      marked_CurSymTxt: string ;
+      marked_CurSymType: integer ;
 
-      constructor Create ; virtual ; 
-      procedure Clear ; virtual ; 
-      procedure MoreInput(s:string) ; 
-      procedure CleanupInput ; 
-      procedure MarkParsePosition ; 
-      procedure RestoreParsePosition ; 
-      function NxtSym(raiseIncompleteOnEof: boolean = true): string ; virtual ; abstract ; 
-    end{ "TYPE TConsoleScanner = class(TObject)" } ; 
+      constructor Create ; virtual ;
+      procedure Clear ; virtual ;
+      procedure MoreInput(s:string) ;
+      procedure CleanupInput ;
+      procedure MarkParsePosition ;
+      procedure RestoreParsePosition ;
+      function NxtSym(raiseIncompleteOnEof: boolean = true): string ; virtual ; abstract ;
+    end{ "TYPE TConsoleScanner = class(TObject)" } ;
 
 
 
-type 
+type
 
   // was kann eine konkrete Console alles?
   // verschiedene '11s haben da verschiedene Logiken
@@ -117,7 +138,7 @@ type
   // A console can "implement" an action also by popping up a message to
   // tell the user wich swithc he should operate.
 
-  TConsoleFeatures = ( 
+  TConsoleFeatures = (
       // examine/deposit können sie alle!
       cfNonFatalHalt, // console läuft nach HALT weiter, Maschine bleibt nicht stehen (M9312!)
       cfNonFatalUNIBUStimeout, // console läuft nach UNIBUS timeout weiter
@@ -128,33 +149,33 @@ type
       cfActionResetMaschineAndStartCpu, // weiterlaufen mit Init
       cfActionContinueCpu, // weiterlaufen ohne Init
       cfActionHaltCpu, // Console kann Program stoppen
-      cfActionSingleStep, 
+      cfActionSingleStep,
 //      cfMicroStep
       cfFlagResetCpuSetsPC // wenn das "Reset" den PC mit setzt
-    ) { "TYPE TConsoleFeatures" } ; 
+    ) { "TYPE TConsoleFeatures" } ;
 
-  TConsoleFeatureSet = set of TConsoleFeatures ; 
+  TConsoleFeatureSet = set of TConsoleFeatures ;
 
   // 11'70: Halt mode, or Run mode? Naming "ENABLE/HALT as on 11/70 panel
-  TConsoleRunMode = (crmUnknown, crmRun, crmHalt) ; 
+  TConsoleRunMode = (crmUnknown, crmRun, crmHalt) ;
 
 
 // wird ausgelöst, wenn die überwachte CPU anhält
-  TConsoleCPUStopEvent = procedure(Sender: TObject ; pc: TMemoryAddress) of object ; 
+  TConsoleCPUStopEvent = procedure(Sender: TObject ; pc: TMemoryAddress) of object ;
 
-  TConsoleGeneric = class(TObject) 
-    private 
+  TConsoleGeneric = class(TObject)
+    private
       CriticalSectionLevel: integer ; // > 0 wenn der User gerade kein Zuriff auf die
       // Console erlauben, weil eine geschlossene Sequenz abläuft
-      MonitorTimer: TTimer ; 
-      procedure MonitorTimerCallback(Sender: TObject) ; 
+      MonitorTimer: TTimer ;
+      procedure MonitorTimerCallback(Sender: TObject) ;
 
-    protected 
-      procedure BeginCriticalSection(location:string = 'location unknown') ; 
-      procedure EndCriticalSection(location:string = 'location unknown') ; 
+    protected
+      procedure BeginCriticalSection(location:string = 'location unknown') ;
+      procedure EndCriticalSection(location:string = 'location unknown') ;
       // stelle sicher, das die Commandoprompt kommt.
-      procedure CheckPrompt(errinfo: string) ; 
-    public 
+      procedure CheckPrompt(errinfo: string) ;
+    public
       AnswerLines: TCollection ; // of TConsoleAnswerPhrase
 
       CommandTimeoutMillis: dword ; // Zeit, bis ein ConsoelCmd benatwortet werden muss.
@@ -167,7 +188,7 @@ type
 
       // CPU running or stopped by console switch? Influences "Features"!
       // Only meaningful if features cfSwitchEnableOrHalt
-      RunMode: TConsoleRunMode ; 
+      RunMode: TConsoleRunMode ;
 
 
       machine_name:string ; // name
@@ -178,39 +199,39 @@ type
       onExecutionStopDetected : boolean ; // true, wenn stop erkannt wurde.
       // Muss von abgeleiteteten Klassen erkannt und gesetzt werden.
 
-      OnExecutionStop: TConsoleCPUStopEvent ; 
+      OnExecutionStop: TConsoleCPUStopEvent ;
 
       // für die Umrechnung virtual->physical Addresse
-      MMU: TPdp11Mmu ; 
+      MMU: TPdp11Mmu ;
 
-      constructor Create ; 
-      destructor Destroy ; override ; 
+      constructor Create ;
+      destructor Destroy ; override ;
 
-      procedure Init(aConnection: TSerialIoHub) ; virtual ; 
+      procedure Init(aConnection: TSerialIoHub) ; virtual ;
 
-      function InCriticalSection: boolean ; 
+      function InCriticalSection: boolean ;
 
-      function getFeatures: TConsoleFeatureSet ; virtual ; abstract ; 
+      function getFeatures: TConsoleFeatureSet ; virtual ; abstract ;
 
       function getPhysicalMemoryAddressType: TMemoryAddressType ; virtual ; abstract ; // 16, 18, 22
 
       // siehe M9312. default fuer andere Consoles: immer 0
-      function getMonitorEntryAddress: TMemoryAddress ; virtual ; 
+      function getMonitorEntryAddress: TMemoryAddress ; virtual ;
 
 
-      procedure Resync ; virtual ; abstract ; 
+      procedure Resync ; virtual ; abstract ;
 
       // Aus SerialRcvDataBuffer die Antworten extrahieren
-      function DecodeNextAnswerPhrase: boolean ; virtual ; abstract ; 
+      function DecodeNextAnswerPhrase: boolean ; virtual ; abstract ;
 
       // low level io
-      procedure OnSerialRcv(curdata: string) ; 
+      procedure OnSerialRcv(curdata: string) ;
 
       // gib die letzte Antwort eines gewissen Typs zurück
-      function GetLastAnswer(phrasetype: TConsoleAnswerPhraseType): TConsoleAnswerPhrase ; 
-      function WaitForAnswer(phrasetype: TConsoleAnswerPhraseType; waitmillis: dword): TConsoleAnswerPhrase ; 
+      function GetLastAnswer(phrasetype: TConsoleAnswerPhraseType): TConsoleAnswerPhrase ;
+      function WaitForAnswer(phrasetype: TConsoleAnswerPhraseType; waitmillis: dword): TConsoleAnswerPhrase ;
 //      function ReadLineFromPDP(var buff:string): boolean ;
-      procedure WriteToPDP(buff:string) ; 
+      procedure WriteToPDP(buff:string) ;
 
 //      procedure TerminalCharToPDP(c: char) ;
 //      procedure TerminalPollPDP(var s:string) ;
@@ -218,17 +239,17 @@ type
 
       // damit können konkrete Consolen den Output der
       // PDP überwachen, zB um selbständigen Stop der Simulation zu erkennen
-      procedure MonitorPdpOutput(curchar: char) ; virtual ; abstract ; 
+      procedure MonitorPdpOutput(curchar: char) ; virtual ; abstract ;
 
       // name der angeschlossenen Console liefern
-      function getName: string ; virtual ;abstract ; 
-      function getTerminalSettings: TTerminalSettings ; virtual ;abstract ; 
+      function getName: string ; virtual ;abstract ;
+      function getTerminalSettings: TTerminalSettings ; virtual ;abstract ;
 
-      procedure ClearState ; virtual ; 
-      procedure Deposit(addr: TMemoryAddress ; val: dword) ; overload ; virtual ;abstract ; 
-      procedure Deposit(mcg: TMemoryCellGroup ; optimize:boolean ; abortable: boolean) ; overload ; virtual ; 
-      function Examine(addr: TMemoryAddress): dword ; overload ; virtual ; abstract ; 
-      procedure Examine(mcg: TMemoryCellGroup ; unknown_only: boolean ; abortable: boolean) ; overload ; virtual ; abstract ; 
+      procedure ClearState ; virtual ;
+      procedure Deposit(addr: TMemoryAddress ; val: dword) ; overload ; virtual ;abstract ;
+      procedure Deposit(mcg: TMemoryCellGroup ; optimize:boolean ; abortable: boolean) ; overload ; virtual ;
+      function Examine(addr: TMemoryAddress): dword ; overload ; virtual ; abstract ;
+      procedure Examine(mcg: TMemoryCellGroup ; unknown_only: boolean ; abortable: boolean) ; overload ; virtual ; abstract ;
 
       // Laufkontrolle. Siehe auch OnSimulationStop. PC ist virtuelle Adresse
       procedure ResetMachine(newpc_v: TMemoryAddress) ; virtual ; abstract ; // CPU+UNIBUS reset
@@ -239,284 +260,284 @@ type
       procedure SingleStep ; virtual ; abstract ; // einen Zyklus ausführen, neuer PC zurück
 
 
-    end{ "TYPE TConsoleGeneric = class(TObject)" } ; 
+    end{ "TYPE TConsoleGeneric = class(TObject)" } ;
 
-implementation 
+implementation
 
-uses 
-  Forms, 
+uses
+  Forms,
   TypInfo, // GetEnumName
-  AuxU, 
-  FormMainU, 
-  FormLogU, 
-  FormNoConsolePromptU 
-  ; 
+  AuxU,
+  FormMainU,
+  FormLogU,
+  FormNoConsolePromptU
+  ;
 
 
 
-function TConsoleAnswerPhrase.AsText: string ; 
-  var s: string ; 
-  begin 
-    s := 'Console answered: ' ; 
-    case phrasetype of 
-      phNone: s := s + 'phNone' ; 
-      phPrompt:  s := s + 'phPrompt' ; 
-      phHalt:  s := s + Format('phHalt, haltaddr= %s', [Addr2OctalStr(haltaddr)]) ; 
-      phExamine:  s := s + Format('phExamine, addr=%s, value=%s', 
-                [Addr2OctalStr(examineaddr), Dword2OctalStr(examinevalue)]) ; 
-      phOtherLine:  s := s + Format('phOtherLine "%s"', [otherline]) ; 
-    end; 
-    result := s ; 
-  end{ "function TConsoleAnswerPhrase.AsText" } ; 
+function TConsoleAnswerPhrase.AsText: string ;
+  var s: string ;
+  begin
+    s := 'Console answered: ' ;
+    case phrasetype of
+      phNone: s := s + 'phNone' ;
+      phPrompt:  s := s + 'phPrompt' ;
+      phHalt:  s := s + Format('phHalt, haltaddr= %s', [Addr2OctalStr(haltaddr)]) ;
+      phExamine:  s := s + Format('phExamine, addr=%s, value=%s',
+                [Addr2OctalStr(examineaddr), Dword2OctalStr(examinevalue)]) ;
+      phOtherLine:  s := s + Format('phOtherLine "%s"', [otherline]) ;
+    end;
+    result := s ;
+  end{ "function TConsoleAnswerPhrase.AsText" } ;
 
 
 
-constructor TConsoleScanner.Create ; 
-  begin 
-    inherited ; 
-    Clear ; 
-  end; 
+constructor TConsoleScanner.Create ;
+  begin
+    inherited ;
+    Clear ;
+  end;
 
-procedure TConsoleScanner.Clear ; 
-  begin 
-    CurInputLine := '' ; 
-    nxtcharidx := 1 ; 
+procedure TConsoleScanner.Clear ;
+  begin
+    CurInputLine := '' ;
+    nxtcharidx := 1 ;
     // abgeleitete Klassen müssen selbst das erste Symbol mit "NxtSym" fetchen.
-  end; 
+  end;
 
 // Add serial input to the parser.
-procedure TConsoleScanner.MoreInput(s:string) ; 
-  var i: integer ; 
-  begin 
+procedure TConsoleScanner.MoreInput(s:string) ;
+  var i: integer ;
+  begin
     // filter out NUL characters.
     // Some consoles produce fill NULs, they may appear everywhere.
-    for i := 1 to length(s) do 
-      if s[i] <> #0 then 
-        CurInputLine := CurInputLine + s[i] ; 
-  end; 
+    for i := 1 to length(s) do
+      if s[i] <> #0 then
+        CurInputLine := CurInputLine + s[i] ;
+  end;
 
-procedure TConsoleScanner.CleanupInput ; 
-  begin 
+procedure TConsoleScanner.CleanupInput ;
+  begin
     // gescannten Teil des Inputbuffers löschen
-    CurInputLine := Copy(CurInputLine, nxtcharidx, maxint) ; 
-    nxtcharidx := 1 ; 
-  end; 
+    CurInputLine := Copy(CurInputLine, nxtcharidx, maxint) ;
+    nxtcharidx := 1 ;
+  end;
 
-procedure TConsoleScanner.MarkParsePosition ; 
-  begin 
-    marked_nxtcharidx := nxtcharidx ; 
-    marked_CurSymTxt := CurSymTxt ; 
-    marked_CurSymType := CurSymType ; 
-  end; 
+procedure TConsoleScanner.MarkParsePosition ;
+  begin
+    marked_nxtcharidx := nxtcharidx ;
+    marked_CurSymTxt := CurSymTxt ;
+    marked_CurSymType := CurSymType ;
+  end;
 
-procedure TConsoleScanner.RestoreParsePosition ; 
-  begin 
-    nxtcharidx := marked_nxtcharidx ; 
-    CurSymTxt := marked_CurSymTxt ; 
-    CurSymType :=marked_CurSymType ; 
-  end; 
+procedure TConsoleScanner.RestoreParsePosition ;
+  begin
+    nxtcharidx := marked_nxtcharidx ;
+    CurSymTxt := marked_CurSymTxt ;
+    CurSymType :=marked_CurSymType ;
+  end;
 
 
-constructor TConsoleGeneric.Create ; 
-  begin 
-    inherited ; 
-    AnswerLines:= TCollection.Create(TConsoleAnswerPhrase) ; 
+constructor TConsoleGeneric.Create ;
+  begin
+    inherited ;
+    AnswerLines:= TCollection.Create(TConsoleAnswerPhrase) ;
 
     MMU := nil ; // muss von abgeleiteter Class passend zur Console erzeugt werden.
-    Connection := nil ; 
-    OnExecutionStop := nil ; 
-    RunMode := crmUnknown ; 
+    Connection := nil ;
+    OnExecutionStop := nil ;
+    RunMode := crmUnknown ;
 
-    RcvScanner := nil ; 
+    RcvScanner := nil ;
 
-    onExecutionStopPcVal.mat := matUnknown ; 
-    onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ; 
-    onExecutionStopDetected := false ; 
+    onExecutionStopPcVal.mat := matUnknown ;
+    onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ;
+    onExecutionStopDetected := false ;
 
-    MonitorTimer := TTimer.Create(nil) ; 
+    MonitorTimer := TTimer.Create(nil) ;
     MonitorTimer.Interval := 100 ; // 10x pro sekunde
-    MonitorTimer.OnTimer := MonitorTimerCallback; 
-    MonitorTimer.Enabled := true ; 
-  end{ "constructor TConsoleGeneric.Create" } ; 
+    MonitorTimer.OnTimer := MonitorTimerCallback;
+    MonitorTimer.Enabled := true ;
+  end{ "constructor TConsoleGeneric.Create" } ;
 
 
-destructor TConsoleGeneric.Destroy ; 
-  begin 
-    MonitorTimer.Free ; 
-    AnswerLines.Free ; 
-    inherited ; 
-  end; 
+destructor TConsoleGeneric.Destroy ;
+  begin
+    MonitorTimer.Free ;
+    AnswerLines.Free ;
+    inherited ;
+  end;
 
 
-procedure TConsoleGeneric.Init(aConnection: TSerialIoHub) ; 
-  begin 
-    CriticalSectionLevel:= 0; 
-    Connection := aConnection ; 
-    onExecutionStopPcVal.mat := matUnknown ; 
-    onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ; 
-  end; 
+procedure TConsoleGeneric.Init(aConnection: TSerialIoHub) ;
+  begin
+    CriticalSectionLevel:= 0;
+    Connection := aConnection ;
+    onExecutionStopPcVal.mat := matUnknown ;
+    onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ;
+  end;
 
-procedure TConsoleGeneric.ClearState ; 
-  begin 
+procedure TConsoleGeneric.ClearState ;
+  begin
     // macht hier im Moment nix
-    onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ; 
-  end; 
+    onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ;
+  end;
 
 
 
 // Begin/Ende von zusammenhängendem  Console/IO markieren.
 // der SimualtionStopEvent wird erst nach Ende
 // einer CriticalSection ausgelöst.
-procedure TConsoleGeneric.BeginCriticalSection(location:string) ; 
-  begin 
-    inc(CriticalSectionLevel) ; 
-    LogStrCol(LogCol_CriticalSection, 'BeginCriticalSection from ' + location) ; 
-  end; 
+procedure TConsoleGeneric.BeginCriticalSection(location:string) ;
+  begin
+    inc(CriticalSectionLevel) ;
+    LogStrCol(LogCol_CriticalSection, 'BeginCriticalSection from ' + location) ;
+  end;
 
 
-procedure TConsoleGeneric.EndCriticalSection(location:string) ; 
-  begin 
-    LogStrCol(LogCol_CriticalSection, 'EndCriticalSection from ' + location) ; 
-    if CriticalSectionLevel > 0 then dec(CriticalSectionLevel) ; 
-  end; 
+procedure TConsoleGeneric.EndCriticalSection(location:string) ;
+  begin
+    LogStrCol(LogCol_CriticalSection, 'EndCriticalSection from ' + location) ;
+    if CriticalSectionLevel > 0 then dec(CriticalSectionLevel) ;
+  end;
 
-function TConsoleGeneric.InCriticalSection: boolean ; 
-  begin 
-    result := CriticalSectionLevel > 0 ; 
-  end; 
+function TConsoleGeneric.InCriticalSection: boolean ;
+  begin
+    result := CriticalSectionLevel > 0 ;
+  end;
 
 
 // String ausgeben. Anwendung muss \n selbst ergänzen!
 // Ausgabe in Logfenster mit Farbe 2
-procedure TConsoleGeneric.WriteToPDP(buff:string) ; 
-  begin 
-    Connection.DataFromConsole(buff) ; 
-  end; 
+procedure TConsoleGeneric.WriteToPDP(buff:string) ;
+  begin
+    Connection.DataFromConsole(buff) ;
+  end;
 
 
 
-procedure TConsoleGeneric.OnSerialRcv(curdata: string) ; 
-  begin 
-    RcvScanner.MoreInput(curdata); 
-    LogStrCol(LogCol_DecodeNextAnswerPhrase,'TConsoleGeneric.OnSerialRcv> "%s"', [String2PrintableText(curdata, true)]); 
-    while DecodeNextAnswerPhrase do 
-      Application.ProcessMessages ; 
-  end; 
+procedure TConsoleGeneric.OnSerialRcv(curdata: string) ;
+  begin
+    RcvScanner.MoreInput(curdata);
+    LogStrCol(LogCol_DecodeNextAnswerPhrase,'TConsoleGeneric.OnSerialRcv> "%s"', [String2PrintableText(curdata, true)]);
+    while DecodeNextAnswerPhrase do
+      Application.ProcessMessages ;
+  end;
 
 
 // gib die letzte Antwort eines gewissen Typs zurück
-function TConsoleGeneric.GetLastAnswer(phrasetype: TConsoleAnswerPhraseType): TConsoleAnswerPhrase ; 
-  var i: integer ; 
-    answerline: TConsoleAnswerPhrase ; 
-  begin 
-    result := nil ; 
-    for i := AnswerLines.Count-1 downto 0 do begin 
-      answerline := AnswerLines.Items[i] as TConsoleAnswerPhrase ; 
-      LogStrCol(LogCol_DecodeNextAnswerPhrase, 
-              'TConsoleGeneric.GetLastAnswer(): #%d = %s "%s"', [i , 
-              GetEnumName(TypeInfo(TConsoleAnswerPhraseType), integer(answerline.phrasetype)), 
-              answerline.rawtext]); 
+function TConsoleGeneric.GetLastAnswer(phrasetype: TConsoleAnswerPhraseType): TConsoleAnswerPhrase ;
+  var i: integer ;
+    answerline: TConsoleAnswerPhrase ;
+  begin
+    result := nil ;
+    for i := AnswerLines.Count-1 downto 0 do begin
+      answerline := AnswerLines.Items[i] as TConsoleAnswerPhrase ;
+      LogStrCol(LogCol_DecodeNextAnswerPhrase,
+              'TConsoleGeneric.GetLastAnswer(): #%d = %s "%s"', [i ,
+              GetEnumName(TypeInfo(TConsoleAnswerPhraseType), integer(answerline.phrasetype)),
+              answerline.rawtext]);
 
-      if answerline.phrasetype = phrasetype then begin 
-        result := answerline ; 
-        Exit ; 
-      end; 
-    end; 
-  end { "function TConsoleGeneric.GetLastAnswer" } ; 
+      if answerline.phrasetype = phrasetype then begin
+        result := answerline ;
+        Exit ;
+      end;
+    end;
+  end { "function TConsoleGeneric.GetLastAnswer" } ;
 
 // warte eine Zeit, bis eine Antwort eines gewissen Typs vorkam
-function TConsoleGeneric.WaitForAnswer(phrasetype: TConsoleAnswerPhraseType; waitmillis: dword): TConsoleAnswerPhrase ; 
-  var starttime: dword ; 
-  begin 
+function TConsoleGeneric.WaitForAnswer(phrasetype: TConsoleAnswerPhraseType; waitmillis: dword): TConsoleAnswerPhrase ;
+  var starttime: dword ;
+  begin
     // result := nil ;
 
     LogStrCol(LogCol_Other, 'WaitForAnswer(phrase=%s, millis=%d)', [
             GetEnumName(TypeInfo(TConsoleAnswerPhraseType), integer(phrasetype)),
             waitmillis]) ;
     starttime := getTickCount ;
-    repeat 
+    repeat
       Application.ProcessMessages ; // Backgroundempfang
-      result := GetLastAnswer(phrasetype) ; 
-      if result = nil then 
-        sleep(1) ; 
-    until (getTickCount > starttime+waitmillis) or (result <> nil) ; 
-    if result = nil then 
-      LogStrCol(LogCol_Other, 'WaitForAnswer: result = nil') 
-    else 
-      LogStrCol(LogCol_Other, 'WaitForAnswer: found!') 
-  end{ "function TConsoleGeneric.WaitForAnswer" } ; 
+      result := GetLastAnswer(phrasetype) ;
+      if result = nil then
+        sleep(1) ;
+    until (getTickCount > starttime+waitmillis) or (result <> nil) ;
+    if result = nil then
+      LogStrCol(LogCol_Other, 'WaitForAnswer: result = nil')
+    else
+      LogStrCol(LogCol_Other, 'WaitForAnswer: found!')
+  end{ "function TConsoleGeneric.WaitForAnswer" } ;
 
 
 // stelle sicher, dass die Commandoprompt in AnswerLines[] vorkommt.
 // warte sonst.
-procedure TConsoleGeneric.CheckPrompt(errinfo: string) ; 
-  var s: string ; 
-  begin 
-    if WaitForAnswer(phPrompt, CommandTimeoutMillis) = nil then begin 
-      FormNoConsolePrompt.ShowModal ; 
-      s := Format('No console prompt: %s!', [errinfo]) ; 
-      Log(s) ; 
+procedure TConsoleGeneric.CheckPrompt(errinfo: string) ;
+  var s: string ;
+  begin
+    if WaitForAnswer(phPrompt, CommandTimeoutMillis) = nil then begin
+      FormNoConsolePrompt.ShowModal ;
+      s := Format('No console prompt: %s!', [errinfo]) ;
+      Log(s) ;
 //      raise Exception.Create(s) ;
-      Abort ; 
-    end; 
-  end; 
+      Abort ;
+    end;
+  end;
 
 // Monitor-Funktion der Console aufrufen, wenn nicht gerade andere Sequenzen aktiv sind
-procedure TConsoleGeneric.MonitorTimerCallback(Sender: TObject) ; 
-  begin 
-    if InCriticalSection then Exit ; 
-    BeginCriticalSection('MonitorTimerCallback'); 
-    try 
-      LogStrCol(LogCol_MonitorTimerCallback, 'MonitorTimerCallback') ; 
+procedure TConsoleGeneric.MonitorTimerCallback(Sender: TObject) ;
+  begin
+    if InCriticalSection then Exit ;
+    BeginCriticalSection('MonitorTimerCallback');
+    try
+      LogStrCol(LogCol_MonitorTimerCallback, 'MonitorTimerCallback') ;
 
       // wenn die abgeleitete console einen pc erkannt hat,
       // der Anwendung das jetzt signalisieren. Dann kann sie
       // im Handler schon wieder die PDP-11 benutzen
-      if assigned(OnExecutionStop) and onExecutionStopDetected then begin 
+      if assigned(OnExecutionStop) and onExecutionStopDetected then begin
 //      if assigned(OnExecutionStop) and (onExecutionStopPcVal.val <> MEMORYCELL_ILLEGALVAL) then begin
-        LogStrCol(LogCol_MonitorTimerCallback, 'call OnExecutionStop()') ; 
-        OnExecutionStop(self, onExecutionStopPcVal) ; 
-      end ; 
-      onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ; 
-      onExecutionStopDetected := false ; 
-    finally 
-      EndCriticalSection('MonitorTimerCallback'); 
-    end{ "try" } ; 
-  end{ "procedure TConsoleGeneric.MonitorTimerCallback" } ; 
+        LogStrCol(LogCol_MonitorTimerCallback, 'call OnExecutionStop()') ;
+        OnExecutionStop(self, onExecutionStopPcVal) ;
+      end ;
+      onExecutionStopPcVal.val := MEMORYCELL_ILLEGALVAL ;
+      onExecutionStopDetected := false ;
+    finally
+      EndCriticalSection('MonitorTimerCallback');
+    end{ "try" } ;
+  end{ "procedure TConsoleGeneric.MonitorTimerCallback" } ;
 
 
-procedure TConsoleGeneric.Deposit(mcg: TMemoryCellGroup ; optimize:boolean; abortable:boolean) ; 
-  var 
-    i: integer ; 
-    mc: TMemoryCell ; 
-  begin 
-    BusyForm.Start('Depositing ...', mcg.Count, abortable) ; 
-    try 
-      for i := 0 to mcg.Count - 1 do begin 
-        BusyForm.StepIt ; if BusyForm.Aborted then Break ; 
-        mc := mcg.Cell(i) ; 
-        if not optimize or (mc.pdp_value <> mc.edit_value) then begin 
-          Deposit(mc.addr, mc.edit_value) ; 
-          mc.pdp_value := mc.edit_value ; 
+procedure TConsoleGeneric.Deposit(mcg: TMemoryCellGroup ; optimize:boolean; abortable:boolean) ;
+  var
+    i: integer ;
+    mc: TMemoryCell ;
+  begin
+    BusyForm.Start('Depositing ...', mcg.Count, abortable) ;
+    try
+      for i := 0 to mcg.Count - 1 do begin
+        BusyForm.StepIt ; if BusyForm.Aborted then Break ;
+        mc := mcg.Cell(i) ;
+        if not optimize or (mc.pdp_value <> mc.edit_value) then begin
+          Deposit(mc.addr, mc.edit_value) ;
+          mc.pdp_value := mc.edit_value ;
           // dieselbe Zelle in NachbarGroups aktualisieren,
           // dort werden die OnMemoryCellChange-Callbacks aufgerufen
           if mcg.Collection <> nil then // nil bei code window
-            (mcg.Collection as TMemoryCellGroups).SyncMemoryCells(mc) ; 
-        end; 
-      end; 
-    finally 
-      BusyForm.Close ; 
-    end{ "try" } ; 
-  end{ "procedure TConsoleGeneric.Deposit" } ; 
+            (mcg.Collection as TMemoryCellGroups).SyncMemoryCells(mc) ;
+        end;
+      end;
+    finally
+      BusyForm.Close ;
+    end{ "try" } ;
+  end{ "procedure TConsoleGeneric.Deposit" } ;
 
 
 // alle Consoles ausser M9312 markieren ein "not defined"
-function TConsoleGeneric.getMonitorEntryAddress: TMemoryAddress ; 
-  begin 
-    result.mat := matPhysical16 ; 
-    result.val := MEMORYCELL_ILLEGALVAL ; 
-  end ; 
+function TConsoleGeneric.getMonitorEntryAddress: TMemoryAddress ;
+  begin
+    result.mat := matPhysical16 ;
+    result.val := MEMORYCELL_ILLEGALVAL ;
+  end ;
 
 
 
-end{ "unit ConsoleGenericU" } . 
+end{ "unit ConsoleGenericU" } .

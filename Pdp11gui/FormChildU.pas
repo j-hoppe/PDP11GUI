@@ -1,4 +1,25 @@
 unit FormChildU;
+{
+   Copyright (c) 2016, Joerg Hoppe
+   j_hoppe@t-online.de, www.retrocmp.com
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   JOERG HOPPE BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
 
 {
     Basisklasse für die PDP11GUI-MDIChilds.
@@ -24,17 +45,17 @@ unit FormChildU;
      udn lässt Schriftgrössen wie etnworfen.
 }
 
-interface 
-uses 
-  Classes, Forms ; 
+interface
+uses
+  Classes, Forms ;
 
-type 
-  TFormChild = class(TForm) 
-    private 
-      mOnBeforeHide: TNotifyEvent ; 
-      mOnAfterShow: TNotifyEvent ; 
-      orgFormStyle :TFormStyle ; 
-    public 
+type
+  TFormChild = class(TForm)
+    private
+      mOnBeforeHide: TNotifyEvent ;
+      mOnAfterShow: TNotifyEvent ;
+      orgFormStyle :TFormStyle ;
+    public
       constructor Create(aOwner: TComponent) ; virtual ;
       procedure Show ; virtual ;
       procedure Hide ; virtual ;
@@ -61,23 +82,23 @@ constructor TFormChild.Create(aOwner: TComponent) ;
   end ;
 
 // MDIChild "unsichtbar" durch umschalten auf normale Form
-procedure TFormChild.Hide ; 
+procedure TFormChild.Hide ;
 var orgOnFormShow: TNotifyEvent ;
   begin
     // muss sich die Form vorbereiten?
     // Form ist noch ein sichtbares MDI-Child: Form reduzieren
-    if assigned(mOnBeforeHide) then mOnBeforeHide(self) ; 
-    orgFormStyle := FormStyle ; 
-    if FormStyle = fsMDIChild then begin 
+    if assigned(mOnBeforeHide) then mOnBeforeHide(self) ;
+    orgFormStyle := FormStyle ;
+    if FormStyle = fsMDIChild then begin
       //childform.PrepareForClose ;
       // "Formstyle := " bewirkt ein "FormShow": unterdrücke es!
       orgOnFormShow := self.OnShow  ; self.OnShow := nil ; // disable OnFormShow
       self.FormStyle := fsNormal ;
       self.OnShow := orgOnFormShow ; // re-enable OnFormShow
-    end; 
-    TheRegistry.Save(self) ; 
-    inherited Hide ; 
-  end ; 
+    end;
+    TheRegistry.Save(self) ;
+    inherited Hide ;
+  end ;
 
 // MDIChild "unsichtbar" durch umschalten auf normale Form
 procedure TFormChild.Show ;
@@ -95,4 +116,4 @@ procedure TFormChild.Show ;
 
 //
 
-end{ "unit FormChildU" } . 
+end{ "unit FormChildU" } .

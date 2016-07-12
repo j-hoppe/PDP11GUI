@@ -1,3 +1,27 @@
+unit FakePDP11ODTU;
+{
+   Copyright (c) 2016, Joerg Hoppe
+   j_hoppe@t-online.de, www.retrocmp.com
+
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   JOERG HOPPE BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
+
+
 {
 
 Definition:
@@ -20,7 +44,6 @@ Kernel/Userstack Rx depend on PSW-Mode !!!
 Das Flag RUNMODE steuert das verhalten von nnnG (START)und P (Proceed)
 }
 
-unit FakePDP11ODTU; 
 {
   Simuliert eine rudimentäre PDP-11 ODT console ( wie 11/73).
   Sie dient nur zum Test der GUI
@@ -147,146 +170,146 @@ don't think it really matters at start-up.
 
 
 }
-interface 
+interface
 
-uses 
-  Windows, Classes, SysUtils, 
-  JH_Utilities, 
-  FakePDP11GenericU, 
-  AddressU, 
-  MemoryCellU ; 
+uses
+  Windows, Classes, SysUtils,
+  JH_Utilities,
+  FakePDP11GenericU,
+  AddressU,
+  MemoryCellU ;
 
 
-type 
+type
 
-  TFakePDP11ODTState = ( 
-      odtstateInit, 
+  TFakePDP11ODTState = (
+      odtstateInit,
       odtstatePrompt,   // @ wird angezeigt
       odtstateEnterLocationAddr, // user hat nach @ was getippt
       odtstateOpen,  // user hat / getippt, wert von addr wurde angezeigt
       odtstateEnterLocationContents // user tippt nach val neuen val ein
-    ) ; 
+    ) ;
 
-  TFakePDP11ODT = class(TFakePDP11Generic) 
-    private 
+  TFakePDP11ODT = class(TFakePDP11Generic)
+    private
       LastLocationExpr: string ; // letzte geöffnete Location
       NextLocationExpr: string ; // logisch "nächste" Addresse
 
       LastLocationAddr: TMemoryAddress ; // letzte geöffnete Addresse
 
-      procedure print(s:string) ; 
+      procedure print(s:string) ;
 
       // Consol-Commandos verarbeiten
       procedure doPrompt(print_prompt:boolean=true) ; // Eingabe reset
-      procedure doOpenLocation(addrexpr:string) ; 
+      procedure doOpenLocation(addrexpr:string) ;
       procedure doCloseLocation(valexpr:string) ; // ohne Prompt
-      procedure doRun(valexpr: string) ; 
-      procedure doReset(valexpr: string) ; 
-      procedure doSingleStep(valexpr: string) ; 
+      procedure doRun(valexpr: string) ;
+      procedure doReset(valexpr: string) ;
+      procedure doSingleStep(valexpr: string) ;
       procedure doError ; // ohne Prompt
 
 
-    public 
+    public
 
-      TheState: TFakePDP11ODTState ; 
+      TheState: TFakePDP11ODTState ;
 
       // Rüdiger Kurt 2016: hat Robotron A6402 mit K1630 CPU,
       // PDP-11 Nachbau, der als ODT prompt nicht "@", sondern "@ " zeigt.
-      IsK1630: boolean ; 
+      IsK1630: boolean ;
 
 
 
-      constructor Create(mat: TMemoryAddressType) ; override ; 
+      constructor Create(mat: TMemoryAddressType) ; override ;
 
-      procedure PowerOn ; override ; 
-      procedure Reset ; override ; 
+      procedure PowerOn ; override ;
+      procedure Reset ; override ;
 
       // Interface zur seriellen Console
-      function SerialReadByte(var b: byte) : boolean ; override ; 
-      function SerialWriteByte(b: byte) : boolean ; override ; 
+      function SerialReadByte(var b: byte) : boolean ; override ;
+      function SerialWriteByte(b: byte) : boolean ; override ;
 
       // So tun, als ob eine laufende CPU auf ein HALT gerannt waere
-      procedure doHalt ; override ; 
+      procedure doHalt ; override ;
 
-    end{ "TYPE TFakePDP11ODT = class(TFakePDP11Generic)" } ; 
-
-
-implementation 
-
-uses 
-  OctalConst, 
-  AuxU 
-  ; 
+    end{ "TYPE TFakePDP11ODT = class(TFakePDP11Generic)" } ;
 
 
-constructor TFakePDP11ODT.Create(mat: TMemoryAddressType) ; 
-  begin 
-    inherited Create(mat) ; 
-    IsK1630 := false ; 
-  end; 
+implementation
+
+uses
+  OctalConst,
+  AuxU
+  ;
+
+
+constructor TFakePDP11ODT.Create(mat: TMemoryAddressType) ;
+  begin
+    inherited Create(mat) ;
+    IsK1630 := false ;
+  end;
 
 // Speicher löschen
-procedure TFakePDP11ODT.PowerOn ; 
-  var i: integer ; 
-  begin 
-    for i := 0 to PhysicalMemorySize - 1 do 
-      Mem[i] := 0 ; 
+procedure TFakePDP11ODT.PowerOn ;
+  var i: integer ;
+  begin
+    for i := 0 to PhysicalMemorySize - 1 do
+      Mem[i] := 0 ;
 
-    SerialInBuff := '' ; 
-    SerialOutBuff := '' ; 
-    Reset ; 
-  end; 
+    SerialInBuff := '' ;
+    SerialOutBuff := '' ;
+    Reset ;
+  end;
 
-procedure TFakePDP11ODT.Reset ; 
-  begin 
-    TheState := odtstateInit ; 
+procedure TFakePDP11ODT.Reset ;
+  begin
+    TheState := odtstateInit ;
 
-    SerialInBuff := '' ; 
+    SerialInBuff := '' ;
 
-    LastLocationExpr := '' ; 
+    LastLocationExpr := '' ;
 
     // start PC = 173000 auf PDP-11/73
-    setMem(ProgramCounterAddr, _173000) ; 
+    setMem(ProgramCounterAddr, _173000) ;
 
     doHalt ; // tue so, also ob ein HALT gekommen waere
-  end; 
+  end;
 
 
 
 // Interface zur serialle Console
-function TFakePDP11ODT.SerialReadByte(var b: byte) : boolean ; 
-  begin 
-    if SerialOutBuff = '' then 
+function TFakePDP11ODT.SerialReadByte(var b: byte) : boolean ;
+  begin
+    if SerialOutBuff = '' then
       result := false // buffer leer: nix zu lesen da!
-    else begin 
+    else begin
       // ältestes Zeichen zurückgeben
-      b := byte(SerialOutBuff[1]) ; 
-      SerialOutBuff := Copy(SerialOutBuff, 2, maxint) ; 
-      result := true ; 
-    end; 
-  end; 
+      b := byte(SerialOutBuff[1]) ;
+      SerialOutBuff := Copy(SerialOutBuff, 2, maxint) ;
+      result := true ;
+    end;
+  end;
 
-procedure TFakePDP11ODT.print(s:string) ; 
-  begin 
-    SerialOutBuff := SerialOutBuff + s ; 
-  end; 
+procedure TFakePDP11ODT.print(s:string) ;
+  begin
+    SerialOutBuff := SerialOutBuff + s ;
+  end;
 
 
 // Prompt "@" drucken und alles für neue Zeile vorbereiten.
 // das "@"  kann auch unterdrückt werden, siehe <LF>-Problematik.
-procedure TFakePDP11ODT.doPrompt(print_prompt:boolean=true) ; 
-  begin 
-    if print_prompt then begin 
-      if IsK1630 then 
+procedure TFakePDP11ODT.doPrompt(print_prompt:boolean=true) ;
+  begin
+    if print_prompt then begin
+      if IsK1630 then
 //        print(CHAR_CR + CHAR_LF + ' ?'+CHAR_LF + CHAR_CR + '@ ')
-        print(CHAR_LF + CHAR_CR + '@ ') 
-      else 
-        print(CHAR_CR + CHAR_LF + '@') ; 
-    end else 
-      print(CHAR_CR + CHAR_LF) ; 
-    SerialInBuff := '' ; 
-    TheState := odtstatePrompt ; 
-  end; 
+        print(CHAR_LF + CHAR_CR + '@ ')
+      else
+        print(CHAR_CR + CHAR_LF + '@') ;
+    end else
+      print(CHAR_CR + CHAR_LF) ;
+    SerialInBuff := '' ;
+    TheState := odtstatePrompt ;
+  end;
 
 // Wert einer Adresse anzeigen. addrexpr muss ein gültiger
 // addressausdruck sein: octal, oder R0..R7, $0..$§7 $S,RS, oder ähnlich
@@ -294,251 +317,251 @@ procedure TFakePDP11ODT.doPrompt(print_prompt:boolean=true) ;
 // Ausserdem wird hier gleich "next_location" berechnet.
 // das ist "+2" für octal adressen, "+! und rollaround für Regsiter,
 // noop für PSW
-procedure TFakePDP11ODT.doOpenLocation(addrexpr:string) ; 
-  var 
-    c: char ; 
-    i: integer ; 
-    val: dword ; 
-    nextlocationaddr: TMemoryAddress ; 
-  begin 
+procedure TFakePDP11ODT.doOpenLocation(addrexpr:string) ;
+  var
+    c: char ;
+    i: integer ;
+    val: dword ;
+    nextlocationaddr: TMemoryAddress ;
+  begin
     NextLocationExpr := '???' ; // invalidate ;
-    addrexpr := Uppercase(addrexpr) ; 
-    LastLocationAddr.mat := mat ; 
-    LastLocationAddr.val := MEMORYCELL_ILLEGALVAL ; 
-    if (addrexpr = '') or not CharInSet(addrexpr[1], ['0'..'7','R','$']) then 
-      raise EFakePDP11Error.Create('') ; 
-    if isOctalDigit(addrexpr[1]) then begin 
+    addrexpr := Uppercase(addrexpr) ;
+    LastLocationAddr.mat := mat ;
+    LastLocationAddr.val := MEMORYCELL_ILLEGALVAL ;
+    if (addrexpr = '') or not CharInSet(addrexpr[1], ['0'..'7','R','$']) then
+      raise EFakePDP11Error.Create('') ;
+    if isOctalDigit(addrexpr[1]) then begin
       // octal address: use only last 8 digits
-      addrexpr := Copy(addrexpr, length(addrexpr)-7, maxint) ; 
-      LastLocationAddr := OctalStr2Addr(addrexpr, mat) ; 
+      addrexpr := Copy(addrexpr, length(addrexpr)-7, maxint) ;
+      LastLocationAddr := OctalStr2Addr(addrexpr, mat) ;
 
       // Abfrage von R0..R7 geht nur mit "R0".."R7". Aber PSW geht mit 17777776 !
       // (Chapter 3.5.1)
-      if (LastLocationAddr.val >= PhysicalIopageBaseAddr + _17700) 
-              and (LastLocationAddr.val <= PhysicalIopageBaseAddr + _17707) then 
-        raise EFakePDP11Error.Create('') ; 
+      if (LastLocationAddr.val >= PhysicalIopageBaseAddr + _17700)
+              and (LastLocationAddr.val <= PhysicalIopageBaseAddr + _17707) then
+        raise EFakePDP11Error.Create('') ;
 
-      if odd(LastLocationAddr.val) then 
-        raise EFakePDP11Error.Create('') ; 
+      if odd(LastLocationAddr.val) then
+        raise EFakePDP11Error.Create('') ;
 
-      LastLocationExpr := Addr2OctalStr(LastLocationAddr) ; 
+      LastLocationExpr := Addr2OctalStr(LastLocationAddr) ;
       nextlocationaddr := LastLocationAddr ; // init
-      if LastLocationAddr.val < PhysicalIopageBaseAddr + _17776 then 
+      if LastLocationAddr.val < PhysicalIopageBaseAddr + _17776 then
         nextlocationaddr.val := LastLocationAddr.val+2 // +=2 für octal adressen
-      else 
+      else
         nextlocationaddr.val := 0 ; // roll around
 
-      NextLocationExpr := Addr2OctalStr(nextlocationaddr) ; 
-    end { "if isOctalDigit(addrexpr[1])" } else if CharInSet(addrexpr[1], ['R','$']) then begin 
-      c := addrexpr[1] ; 
+      NextLocationExpr := Addr2OctalStr(nextlocationaddr) ;
+    end { "if isOctalDigit(addrexpr[1])" } else if CharInSet(addrexpr[1], ['R','$']) then begin
+      c := addrexpr[1] ;
       addrexpr := Copy(addrexpr, 2, maxint) ; // Ziffern abschneiden
       // die letzten 3 Ziffern testen
-      if length(addrexpr) >= 3 then 
-        addrexpr := Copy(addrexpr, length(addrexpr)-2, maxint) ; 
-      if (addrexpr = '077') or (addrexpr = '477') then begin 
+      if length(addrexpr) >= 3 then
+        addrexpr := Copy(addrexpr, length(addrexpr)-2, maxint) ;
+      if (addrexpr = '077') or (addrexpr = '477') then begin
         LastLocationAddr.val := PhysicalIopageBaseAddr + _17776 ; // $077, Rxxx477: alles PSW!
-        addrexpr := 'RS' ; 
-        LastLocationExpr := 'RS' ; 
+        addrexpr := 'RS' ;
+        LastLocationExpr := 'RS' ;
         NextLocationExpr := 'RS' ; // keine nächste Adresse
-      end else begin 
+      end else begin
         // wie "R0", "$6", nur die letzte Ziffer beachten
-        c := addrexpr[length(addrexpr)] ; 
-        case c of 
-          'S': begin 
+        c := addrexpr[length(addrexpr)] ;
+        case c of
+          'S': begin
             LastLocationAddr.val := PhysicalIopageBaseAddr + _17776 ;  // RS -> PSW
-            LastLocationExpr := 'RS' ; 
+            LastLocationExpr := 'RS' ;
             NextLocationExpr := 'RS' ; // keine nächste Adresse
-          end ; 
-          '0'..'7': begin 
-            i := ord(c) - ord('0') ; 
+          end ;
+          '0'..'7': begin
+            i := ord(c) - ord('0') ;
             LastLocationAddr.val := PhysicalIopageBaseAddr + _17700 + i ; // R0..R7
-            LastLocationExpr := 'R' + IntToStr(i) ; 
+            LastLocationExpr := 'R' + IntToStr(i) ;
             i := (i + 1) mod 8 ; // roll around
-            NextLocationExpr := 'R' + IntToStr(i) ; 
-          end ; 
-          else 
-            LastLocationAddr.val := MEMORYCELL_ILLEGALVAL ; 
-        end{ "case c" } ; 
-      end{ "if (addrexpr = '077') or (addrexpr = '477') ... ELSE" } ; 
-    end { "if CharInSet(addrexpr[1], ['R','$'])" } ; 
+            NextLocationExpr := 'R' + IntToStr(i) ;
+          end ;
+          else
+            LastLocationAddr.val := MEMORYCELL_ILLEGALVAL ;
+        end{ "case c" } ;
+      end{ "if (addrexpr = '077') or (addrexpr = '477') ... ELSE" } ;
+    end { "if CharInSet(addrexpr[1], ['R','$'])" } ;
 
-    if LastLocationAddr.val = MEMORYCELL_ILLEGALVAL then 
-      raise EFakePDP11Error.Create('') ; 
+    if LastLocationAddr.val = MEMORYCELL_ILLEGALVAL then
+      raise EFakePDP11Error.Create('') ;
 
-    val := getMem(LastLocationAddr) ; 
-    if val =  MEMORYCELL_ILLEGALVAL then 
-      raise EFakePDP11Error.Create('') ; 
+    val := getMem(LastLocationAddr) ;
+    if val =  MEMORYCELL_ILLEGALVAL then
+      raise EFakePDP11Error.Create('') ;
 
     // Ausgabe. das "/" ist schon angezeigt
-    print(Dword2OctalStr(val, 16) + ' ') ; 
+    print(Dword2OctalStr(val, 16) + ' ') ;
 
-    SerialInBuff := '' ; 
-    TheState := odtstateOpen ; 
+    SerialInBuff := '' ;
+    TheState := odtstateOpen ;
 
-  end{ "procedure TFakePDP11ODT.doOpenLocation" } ; 
+  end{ "procedure TFakePDP11ODT.doOpenLocation" } ;
 
 
 // offene Adresse "last_location" schliessen
 // wenn valexpr <> '': prüfen und neuen Wert schreiben
-procedure TFakePDP11ODT.doCloseLocation(valexpr:string) ; 
-  var 
-    val: dword ; 
-  begin 
-    valexpr := Uppercase(valexpr) ; 
-    if valexpr <> '' then begin 
+procedure TFakePDP11ODT.doCloseLocation(valexpr:string) ;
+  var
+    val: dword ;
+  begin
+    valexpr := Uppercase(valexpr) ;
+    if valexpr <> '' then begin
       // nur die letzten 6 Ziffern beachten
-      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ; 
-      val := OctalStr2Dword(valexpr, 0) ; 
-      if val = MEMORYCELL_ILLEGALVAL then 
-        raise EFakePDP11Error.Create('') ; 
+      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ;
+      val := OctalStr2Dword(valexpr, 0) ;
+      if val = MEMORYCELL_ILLEGALVAL then
+        raise EFakePDP11Error.Create('') ;
       // !!! Die ODT-Console auf 11/73 schreibt illegale Adressen klaglos
 //      try
-      setMem(LastLocationAddr, val); 
+      setMem(LastLocationAddr, val);
 //      except
 //      end;
-    end; 
-  end{ "procedure TFakePDP11ODT.doCloseLocation" } ; 
+    end;
+  end{ "procedure TFakePDP11ODT.doCloseLocation" } ;
 
 // setze PC und starte PSeudo run, der nach Zufallszeit an Zufallsadresse endet
-procedure TFakePDP11ODT.doRun(valexpr: string) ; 
-  var 
-    val: dword ; 
-  begin 
-    if valexpr <> '' then begin 
+procedure TFakePDP11ODT.doRun(valexpr: string) ;
+  var
+    val: dword ;
+  begin
+    if valexpr <> '' then begin
       // nur die letzten 6 Ziffern beachten
-      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ; 
-      val := OctalStr2Dword(valexpr, 0) ; 
-      if val = MEMORYCELL_ILLEGALVAL then 
+      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ;
+      val := OctalStr2Dword(valexpr, 0) ;
+      if val = MEMORYCELL_ILLEGALVAL then
         raise EFakePDP11Error.Create('') ;
       RunToHalt(val) ;
-    end; 
+    end;
 
-  end{ "procedure TFakePDP11ODT.doRun" } ; 
+  end{ "procedure TFakePDP11ODT.doRun" } ;
 
 
-procedure TFakePDP11ODT.doReset(valexpr: string) ; 
-  var 
-    val: dword ; 
-  begin 
-    if valexpr <> '' then begin 
+procedure TFakePDP11ODT.doReset(valexpr: string) ;
+  var
+    val: dword ;
+  begin
+    if valexpr <> '' then begin
       // nur die letzten 6 Ziffern beachten
-      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ; 
-      val := OctalStr2Dword(valexpr, 0) ; 
-      if val = MEMORYCELL_ILLEGALVAL then 
-        raise EFakePDP11Error.Create('') ; 
+      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ;
+      val := OctalStr2Dword(valexpr, 0) ;
+      if val = MEMORYCELL_ILLEGALVAL then
+        raise EFakePDP11Error.Create('') ;
       setMem(ProgramCounterAddr, val); // PC setzen
       doHalt ; // stop
-    end; 
-  end{ "procedure TFakePDP11ODT.doReset" } ; 
+    end;
+  end{ "procedure TFakePDP11ODT.doReset" } ;
 
 
-procedure TFakePDP11ODT.doSingleStep(valexpr: string) ; 
-  var 
-    val: dword ; 
-  begin 
-    if valexpr <> '' then begin 
+procedure TFakePDP11ODT.doSingleStep(valexpr: string) ;
+  var
+    val: dword ;
+  begin
+    if valexpr <> '' then begin
       // nur die letzten 6 Ziffern beachten
-      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ; 
-      val := OctalStr2Dword(valexpr, 0) ; 
-      if val = MEMORYCELL_ILLEGALVAL then 
-        raise EFakePDP11Error.Create('') ; 
+      valexpr := Copy(valexpr, length(valexpr)-5, maxint) ;
+      val := OctalStr2Dword(valexpr, 0) ;
+      if val = MEMORYCELL_ILLEGALVAL then
+        raise EFakePDP11Error.Create('') ;
 
       setMem(ProgramCounterAddr, val+2); // PC eins weiter setzen
       doHalt ; // stop
-    end ; 
-  end{ "procedure TFakePDP11ODT.doSingleStep" } ; 
+    end ;
+  end{ "procedure TFakePDP11ODT.doSingleStep" } ;
 
 
-procedure TFakePDP11ODT.doError ; 
-  begin 
+procedure TFakePDP11ODT.doError ;
+  begin
     // Ausgabe. das "/" ist schon angezeigt
-    if IsK1630 then 
-      print(' ?') 
-    else 
-      print('?') ; 
-  end; 
+    if IsK1630 then
+      print(' ?')
+    else
+      print('?') ;
+  end;
 
 
 // EIn Zeichen in die Zustandsmachine eingeben
 
-function TFakePDP11ODT.SerialWriteByte(b: byte) : boolean ; 
-  var 
-    c: char ; 
-  begin 
+function TFakePDP11ODT.SerialWriteByte(b: byte) : boolean ;
+  var
+    c: char ;
+  begin
     // Wenn die fiktive CPU aktiv ist, gibts keine Console
-    if isRunning then 
-      Exit ; 
+    if isRunning then
+      Exit ;
 
     c := char(b and $7f) ; // 7Bit
     result := true ; // write klappt immer
 
-    try 
+    try
       // Fallunterscheidungen nicht nach  States, sondern nach Keys, denn so ist die DEC-Doku
       // EK-KDJ1B-UG_KDJ11-B_Nov86.pdf, [3.4.1]
-      case UpCase(c) of 
-        'R', '$', 'S': 
+      case UpCase(c) of
+        'R', '$', 'S':
           // oder wird alles ASCII > #$20 geechot?
           begin // nur im Adressfeld
-            print(c) ; 
-            case TheState of 
-              odtstatePrompt: begin 
+            print(c) ;
+            case TheState of
+              odtstatePrompt: begin
                 SerialInBuff := SerialInBuff + c ; // das wird in beinahe allen States gebraucht
-                TheState := odtstateEnterLocationAddr ; 
-              end ; 
-              odtstateEnterLocationAddr: 
+                TheState := odtstateEnterLocationAddr ;
+              end ;
+              odtstateEnterLocationAddr:
                 SerialInBuff := SerialInBuff + c ; // das wird in beinahe allen States gebraucht
-              else 
-                raise EFakePDP11Error.Create('') ; 
-            end; 
-          end{ "case UpCase(c) of 'R', '$', 'S':" } ; 
+              else
+                raise EFakePDP11Error.Create('') ;
+            end;
+          end{ "case UpCase(c) of 'R', '$', 'S':" } ;
         '0'..'7': begin // octalsziffern sind in location addr und value erlaubt
-          print(c) ; 
-          SerialInBuff := SerialInBuff + c ; 
-          case TheState of 
-            odtstatePrompt: 
-              TheState := odtstateEnterLocationAddr ; 
-            odtstateOpen: 
-              TheState := odtstateEnterLocationContents ; 
-          end; 
-        end ; 
-        '/': begin 
-          print(c) ; 
-          case TheState of 
+          print(c) ;
+          SerialInBuff := SerialInBuff + c ;
+          case TheState of
+            odtstatePrompt:
+              TheState := odtstateEnterLocationAddr ;
+            odtstateOpen:
+              TheState := odtstateEnterLocationContents ;
+          end;
+        end ;
+        '/': begin
+          print(c) ;
+          case TheState of
             odtstatePrompt: // slash immediately after prompt
-              if LastLocationExpr = '' then 
-                raise EFakePDP11Error.Create('') 
-              else 
-                doOpenLocation(LastLocationExpr) ; 
-            odtstateEnterLocationAddr: 
-              doOpenLocation(SerialInBuff); 
-            else 
-              raise EFakePDP11Error.Create('') ; 
-          end; 
-        end{ "case UpCase(c) of '/':" } ; 
+              if LastLocationExpr = '' then
+                raise EFakePDP11Error.Create('')
+              else
+                doOpenLocation(LastLocationExpr) ;
+            odtstateEnterLocationAddr:
+              doOpenLocation(SerialInBuff);
+            else
+              raise EFakePDP11Error.Create('') ;
+          end;
+        end{ "case UpCase(c) of '/':" } ;
         CHAR_CR: begin // Close Address.
           // DO NOT echo the <CR> !
-          case TheState of 
-            odtstatePrompt: 
+          case TheState of
+            odtstatePrompt:
               doPrompt ; // my guess!
-            odtstateOpen: begin 
+            odtstateOpen: begin
               doCloseLocation('') ; // do not change
-              doPrompt ; 
-            end; 
-            odtstateEnterLocationContents: begin 
+              doPrompt ;
+            end;
+            odtstateEnterLocationContents: begin
               doCloseLocation(SerialInBuff) ; // change
-              doPrompt ; 
-            end else 
-              raise EFakePDP11Error.Create('') ; 
-          end{ "case TheState" } ; 
-        end{ "case UpCase(c) of CHAR_CR:" } ; 
+              doPrompt ;
+            end else
+              raise EFakePDP11Error.Create('') ;
+          end{ "case TheState" } ;
+        end{ "case UpCase(c) of CHAR_CR:" } ;
         CHAR_LF: begin // close and open next
           // do NOT echo <LF> !
           // ZUS: "next_location" wurde schon in "doOpenLocation() berechnet
           // wenn next_location = 0: roll around von max addr to 0:
           // LF verhält sich dann aber wie <CR>!
-          case TheState of 
-            odtstateOpen, odtstateEnterLocationContents: begin 
-              if TheState = odtstateOpen then 
+          case TheState of
+            odtstateOpen, odtstateEnterLocationContents: begin
+              if TheState = odtstateOpen then
                 doCloseLocation('')  // do not change.
               else doCloseLocation(SerialInBuff) ; // change
               // Not clear, wether the next line is preceeded by a @ or not:
@@ -546,40 +569,40 @@ function TFakePDP11ODT.SerialWriteByte(b: byte) : boolean ;
               // ODT-11 also has no @
               if (NextLocationExpr = '00000000') or (LastLocationExpr = 'RS') then begin // STOP des auto inc
                 doPrompt(true) ; // normal prompt
-              end else begin 
+              end else begin
                 doPrompt(false) ; // do NOT print "@"
                 print(NextLocationExpr) ; print('/') ; // show next location
-                doOpenLocation(NextLocationExpr); 
-              end; 
+                doOpenLocation(NextLocationExpr);
+              end;
             end { "case TheState of odtstateOpen, odtstateEnterLocationContents:" } else // LF an der falschen Stelle
-              raise EFakePDP11Error.Create('') ; 
-          end{ "case TheState" } ; 
-        end{ "case UpCase(c) of CHAR_LF:" } ; 
+              raise EFakePDP11Error.Create('') ;
+          end{ "case TheState" } ;
+        end{ "case UpCase(c) of CHAR_LF:" } ;
         // go, proceed: NO-OP
-        'G': begin 
-          print(c) ; 
-          case TheState of 
+        'G': begin
+          print(c) ;
+          case TheState of
             odtstateEnterLocationAddr: // adresse muss eingeben sein
               if RunMode then
-                doRun(SerialInBuff) 
-              else doReset(SerialInBuff) 
-            else 
-              raise EFakePDP11Error.Create('') ; 
-          end; 
-        end; 
+                doRun(SerialInBuff)
+              else doReset(SerialInBuff)
+            else
+              raise EFakePDP11Error.Create('') ;
+          end;
+        end;
         'P': begin // proceed ab PC
-          print(c) ; 
-          case TheState of 
-            odtstatePrompt: begin 
-              if RunMode then 
-                doRun(Dword2OctalStr(getMem(ProgramCounterAddr), 16)) 
-              else doSingleStep(Dword2OctalStr(getMem(ProgramCounterAddr), 16)) ; 
-            end else 
-              raise EFakePDP11Error.Create('') ; 
-          end; 
-        end; 
+          print(c) ;
+          case TheState of
+            odtstatePrompt: begin
+              if RunMode then
+                doRun(Dword2OctalStr(getMem(ProgramCounterAddr), 16))
+              else doSingleStep(Dword2OctalStr(getMem(ProgramCounterAddr), 16)) ;
+            end else
+              raise EFakePDP11Error.Create('') ;
+          end;
+        end;
         // illegale Zeichen: echo und Error
-        else begin 
+        else begin
           // K1630 erlaubt suffix "A" nach adressen: das sind dann absolute, nicht virtual
           // ignore
           if (c = 'A') and IsK1630 and (TheState = odtstateEnterLocationAddr) then begin
@@ -589,31 +612,31 @@ function TFakePDP11ODT.SerialWriteByte(b: byte) : boolean ;
             // Error
             print(c) ;
             raise EFakePDP11Error.Create('') ;
-          end; 
-        end; 
-      end{ "case UpCase(c)" } ; 
+          end;
+        end;
+      end{ "case UpCase(c)" } ;
 
       // Fehlermeldungen der Console
-    except 
-      on e: EFakePDP11Error do begin 
-        doError ; 
-        doPrompt ; 
-      end; 
-    end{ "try" } ; 
+    except
+      on e: EFakePDP11Error do begin
+        doError ;
+        doPrompt ;
+      end;
+    end{ "try" } ;
 
-  end{ "function TFakePDP11ODT.SerialWriteByte" } ; 
+  end{ "function TFakePDP11ODT.SerialWriteByte" } ;
 
 
-procedure TFakePDP11ODT.doHalt ; 
-  var pc: dword ; 
-  begin 
+procedure TFakePDP11ODT.doHalt ;
+  var pc: dword ;
+  begin
     pc := getMem(ProgramCounterAddr) ;
     if IsK1630 then // K1630 puts an "Esc S" before cr/lf on HALT
       print(CHAR_ESC + 'S' + CHAR_CR + CHAR_LF + Dword2OctalStr(pc, 16))
     else
       print(CHAR_CR + CHAR_LF + Dword2OctalStr(pc, 16)) ;
-    doPrompt ; 
-  end; 
+    doPrompt ;
+  end;
 
 
-end{ "unit FakePDP11ODTU" } . 
+end{ "unit FakePDP11ODTU" } .

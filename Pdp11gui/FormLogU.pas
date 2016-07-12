@@ -1,14 +1,35 @@
 unit FormLogU;
+{
+   Copyright (c) 2016, Joerg Hoppe
+   j_hoppe@t-online.de, www.retrocmp.com
 
-interface 
+   Permission is hereby granted, free of charge, to any person obtaining a
+   copy of this software and associated documentation files (the "Software"),
+   to deal in the Software without restriction, including without limitation
+   the rights to use, copy, modify, merge, publish, distribute, sublicense,
+   and/or sell copies of the Software, and to permit persons to whom the
+   Software is furnished to do so, subject to the following conditions:
 
-uses 
-  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms, 
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+   JOERG HOPPE BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+}
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   TypInfo, // GetEnumName
-  Dialogs, StdCtrls, Menus, 
-  FormChildU ; 
+  Dialogs, StdCtrls, Menus,
+  FormChildU ;
 
-var 
+var
 {$ifdef DEBUG}
   Connection_LogIoStream: boolean = false ; // ReadByte/WriteByte in Logform anzeigen
 //  Connection_LogIoStream: boolean = true ; // ReadByte/WriteByte in Logform anzeigen
@@ -35,9 +56,9 @@ type
     ) ;
 
 type
-  TFormLog = class(TFormChild) 
-      LogMemo: TMemo; 
-      PopupMenu1: TPopupMenu; 
+  TFormLog = class(TFormChild)
+      LogMemo: TMemo;
+      PopupMenu1: TPopupMenu;
       Clear1: TMenuItem;
       procedure Clear1Click(Sender: TObject);
       procedure LogMemoMouseUp(Sender: TObject; Button: TMouseButton;
@@ -61,25 +82,25 @@ type
 
       procedure Log2Buffer(s:string) ;
 
-    end{ "TYPE TFormLog = class(TFormChild)" } ; 
+    end{ "TYPE TFormLog = class(TFormChild)" } ;
 
 
     // global, for easy acces while debugging
     var LogBuffer: TStringList ;
 
-implementation 
+implementation
 
 {$R *.dfm}
 
-uses 
-  JH_Utilities, 
-  AuxU , SerialIoHubU; 
+uses
+  JH_Utilities,
+  AuxU , SerialIoHubU;
 
 
-procedure TFormLog.Clear ; 
-  begin 
-    LogMemo.Clear ; 
-  end; 
+procedure TFormLog.Clear ;
+  begin
+    LogMemo.Clear ;
+  end;
 
 function TFormLog.getLogline(s:string): string ;
   var datestr: string ;
@@ -120,127 +141,127 @@ procedure TFormLog.Log(s:string) ;
 
 // String in Column "colidx" loggen
 // Wenn String = '$HEADERS': Überschriftenzeile fabrizieren
-procedure TFormLog.LogStrCol(aColidx: TLogColumnIndex ; logstr: string) ; 
+procedure TFormLog.LogStrCol(aColidx: TLogColumnIndex ; logstr: string) ;
 
-  const 
+  const
     columwidth = 20 ;
     LogFileTitleIntervall = 20 ; // sooft die Spaltenuberschriften im Logfile wiederholen
 
-  function gettabseppos(colidx:TLogColumnIndex):Integer ; 
-    begin 
+  function gettabseppos(colidx:TLogColumnIndex):Integer ;
+    begin
       // Strings starten mit 1, an i+1 steht der '|', start der Zelle an i+2
       result := (ord(colidx) * columwidth)+ 1 ;
-    end; 
+    end;
 
   // leere Zeile, mit Spaltenspearatoren und viel Platz zurückgeben
-  procedure init_putstr(var buff:string) ; 
-    var i: Integer ; 
-      colidx: TLogColumnIndex ; 
-    begin 
-      buff := '' ; 
-      for i := 0 to 20 do 
-        buff := buff + '                                                          ' ; 
-      for colidx := low(TLogColumnIndex) to high(TLogColumnIndex) do 
-        buff[gettabseppos(colidx)] := '|' ; 
-    end ; 
+  procedure init_putstr(var buff:string) ;
+    var i: Integer ;
+      colidx: TLogColumnIndex ;
+    begin
+      buff := '' ;
+      for i := 0 to 20 do
+        buff := buff + '                                                          ' ;
+      for colidx := low(TLogColumnIndex) to high(TLogColumnIndex) do
+        buff[gettabseppos(colidx)] := '|' ;
+    end ;
 
   // String in Zelle
-  procedure putstr(var buff: string ; colidx:TLogColumnIndex; s: string) ; 
-    var j: Integer ; 
-    begin 
-      for j := 1 to length(s) do 
+  procedure putstr(var buff: string ; colidx:TLogColumnIndex; s: string) ;
+    var j: Integer ;
+    begin
+      for j := 1 to length(s) do
         buff[1 + ord(colidx)*columwidth + j] := s[j] ;
-    end; 
+    end;
 
-  var i: Integer ; 
-    colidx: TLogColumnIndex ; 
-    linebuff: string ; 
-    s: string ; 
-    datestr: string ; 
-    lineinfostr:string ; 
-  begin { "procedure TFormLog.LogStrCol" } 
-    if not Connection_LogIoStream then Exit ; 
+  var i: Integer ;
+    colidx: TLogColumnIndex ;
+    linebuff: string ;
+    s: string ;
+    datestr: string ;
+    lineinfostr:string ;
+  begin { "procedure TFormLog.LogStrCol" }
+    if not Connection_LogIoStream then Exit ;
 
     // Zeileninfo: hier mit GetTickCount
-    DateTimeToString(datestr, 'hh:nn:ss', Now) ; 
-    lineinfostr := Format('[%4d: %s = %7.0n]', [LogFileLineCount, datestr, 1.0*GetTickCount]) ; 
+    DateTimeToString(datestr, 'hh:nn:ss', Now) ;
+    lineinfostr := Format('[%4d: %s = %7.0n]', [LogFileLineCount, datestr, 1.0*GetTickCount]) ;
 
     // erstmal 1K Zeile leer füllen
-    init_putstr(linebuff) ; 
+    init_putstr(linebuff) ;
     // Titelzeile ausgeben?
-    if (LogFileLineCount mod LogFileTitleIntervall) = 0 then begin 
-      for colidx := low(TLogColumnIndex) to high(TLogColumnIndex) do begin 
-        s := GetEnumName(TypeInfo(TLogColumnIndex), Integer(colidx)) ; 
+    if (LogFileLineCount mod LogFileTitleIntervall) = 0 then begin
+      for colidx := low(TLogColumnIndex) to high(TLogColumnIndex) do begin
+        s := GetEnumName(TypeInfo(TLogColumnIndex), Integer(colidx)) ;
         s := Copy(s, 1+length('LogCol_'), maxint) ; // immer gleiches Prefix weg
         s := Copy(s, 1, columwidth-1) ; // Auf Platz verkürzen
-        putstr(linebuff, colidx, s) ; 
-      end ; 
-      linebuff := Trim(linebuff) ; 
+        putstr(linebuff, colidx, s) ;
+      end ;
+      linebuff := Trim(linebuff) ;
       // Links keine lineinfo, dafür gleich langer Leerstring
-      s := lineinfostr ; 
-      for i := 1 to length(s) do s[i] := '-' ; 
-      writeln(LogFile, s + ' ' + linebuff) ; 
-    end{ "if (LogFileLineCount mod LogFileTitleIntervall) = 0" } ; 
+      s := lineinfostr ;
+      for i := 1 to length(s) do s[i] := '-' ;
+      writeln(LogFile, s + ' ' + linebuff) ;
+    end{ "if (LogFileLineCount mod LogFileTitleIntervall) = 0" } ;
 
     // nur den einen String in die Zelle schreiben
-    init_putstr(linebuff) ; 
-    putstr(linebuff, aColidx, logstr) ; 
-    linebuff := Trim(linebuff) ; 
-    writeln(LogFile, lineinfostr + ' ' + linebuff) ; 
-    inc(LogFileLineCount) ; 
-  end{ "procedure TFormLog.LogStrCol" } ; 
+    init_putstr(linebuff) ;
+    putstr(linebuff, aColidx, logstr) ;
+    linebuff := Trim(linebuff) ;
+    writeln(LogFile, lineinfostr + ' ' + linebuff) ;
+    inc(LogFileLineCount) ;
+  end{ "procedure TFormLog.LogStrCol" } ;
 
 
-procedure TFormLog.Clear1Click(Sender: TObject); 
-  begin 
-    Clear ; 
-  end; 
+procedure TFormLog.Clear1Click(Sender: TObject);
+  begin
+    Clear ;
+  end;
 
 
-procedure TFormLog.FormCreate(Sender: TObject); 
-  var tmpdir: string ; 
-  begin 
-    LogFileLineCount := 0 ; 
-    if Connection_LogIoStream then begin 
-      try 
-        if not GetEnv('TEMP', tmpdir) then 
+procedure TFormLog.FormCreate(Sender: TObject);
+  var tmpdir: string ;
+  begin
+    LogFileLineCount := 0 ;
+    if Connection_LogIoStream then begin
+      try
+        if not GetEnv('TEMP', tmpdir) then
           tmpdir := 'C:\' ; // panic, does  not work on win7/vista
         // Ungültig unter Vista !!!
-        AssignFile(LogFile, tmpdir + '\' + Connection_LogIoStream_Filename) ; 
-        Rewrite(LogFile) ; 
-      except 
+        AssignFile(LogFile, tmpdir + '\' + Connection_LogIoStream_Filename) ;
+        Rewrite(LogFile) ;
+      except
         // kein Logging, wenn file nicht auf geht!
-        Connection_LogIoStream := false ; 
-      end ; 
-//      LogStrCol(LogCol_Other, '$HEADERS') ; 
-    end { "if Connection_LogIoStream" } ; 
-  end{ "procedure TFormLog.FormCreate" } ; 
+        Connection_LogIoStream := false ;
+      end ;
+//      LogStrCol(LogCol_Other, '$HEADERS') ;
+    end { "if Connection_LogIoStream" } ;
+  end{ "procedure TFormLog.FormCreate" } ;
 
 
 
-procedure TFormLog.FormDestroy(Sender: TObject); 
-  begin 
-    if Connection_LogIoStream then 
-      CloseFile(LogFile) ; 
-  end; 
+procedure TFormLog.FormDestroy(Sender: TObject);
+  begin
+    if Connection_LogIoStream then
+      CloseFile(LogFile) ;
+  end;
 
-procedure TFormLog.Log(fmt:string; args: array of const) ; 
-  begin 
-    Log(Format(fmt,args)) ; 
-  end ; 
+procedure TFormLog.Log(fmt:string; args: array of const) ;
+  begin
+    Log(Format(fmt,args)) ;
+  end ;
 
 
 
-procedure TFormLog.LogMemoMouseUp(Sender: TObject; Button: TMouseButton; 
-        Shift: TShiftState; X, Y: Integer); 
-  var p: TPoint ; 
-  begin 
-    if Button = mbRight then begin 
-      p.X := X ; p.Y := Y ; 
-      p := LogMemo.ClientToscreen(p) ; 
-      PopupMenu1.PopUp(p.X, p.Y) ; 
-    end; 
-  end; 
+procedure TFormLog.LogMemoMouseUp(Sender: TObject; Button: TMouseButton;
+        Shift: TShiftState; X, Y: Integer);
+  var p: TPoint ;
+  begin
+    if Button = mbRight then begin
+      p.X := X ; p.Y := Y ;
+      p := LogMemo.ClientToscreen(p) ;
+      PopupMenu1.PopUp(p.X, p.Y) ;
+    end;
+  end;
 
 
   initialization

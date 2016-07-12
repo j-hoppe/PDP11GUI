@@ -1,0 +1,261 @@
+	.title	PDP11GUI RK05 sector loader/writer for RK11 controller
+
+	; This code reads or writes one sector from a RK05 into memory
+	; It is used by PDP11GUI to access a RK05 disc
+	;
+	; See
+	;	RK11-D and RK11-E moving head disk drive controller manual (Aug 1973, DEC-11-HRKDA-B-D).pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; call conventions, stack, entry points: see "pdp11gui_main.mac"
+
+	; framework
+	.include	pdp11gui_main.mac
+
+	; Flags in parameter "prflags": not used
+	; prtrack is 0..202
+	; prhead is 0..1
+	; prsector is 0..11
+
+	; controller register offsets against base address
+
+rkds	=+0		; drive status register
+rker	=+2		; error register
+rkcs	=+4		; control status register
+rkwc	=+6		; word count register
+rkba	=+10		; current bus address register
+rkda	=+12		; disk address register
+rkdb	=+16		; data buffer register
+
+
+	; function opcodes (Bit 3:1 in rkcs), with GO bit set
+fncrst	=0*2+1		; Control Reset
+fnwrit	=1*2+1		; Write
+fnread	=2*2+1		; Read
+fnwchk	=3*2+1		; Write Check
+fnseek	=4*2+1		; Seek
+fnrchk	=5*2+1		; Read Check
+fndrst	=6*2+1		; Drive Reset
+fnwlck	=7*2+1		; Write Lock
+
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+; --------------- entry for "get drive information --------------------
+; reset drive and reset controller
+
+doinit: 	; RK11 executes "Control Reset", then "Drive Reset"
+	mov	@#prcba,r4	; r4 = always controller base address
+	mov	#fncrst,rkcs(r4)    ; reset controller
+
+1$:	tstb	rkcs(r4)	; check controller ready
+	bpl	1$		; loop while 0
+
+	; select drive
+	clr	r2
+	clr	r3
+	call	@#setreg	; set all data, only drive selectin rkda matters here
+	mov	#fndrst,rkcs(r4)	; reset drive
+
+2$:	bit	#100,rkds(r4)	; wait for Read/Write/seek READY
+	beq	2$
+
+
+	mov	#rspdat,r3	; if no error: return no data
+	mov	#101,r5 	; error location #101
+	call	@#chkerr	; wait and check
+	call	@#chkerr	; permanent errors ?
+
+
+	; carry is error flag
+	jmp	@#doresp
+
+
+; --------------- entry for read and / check--------------------
+
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#102,r5 	; error location
+
+	mov	#rspdat,r3	; r3 = start of result block
+	mov	@#prwlen,r2	; wordcount to read
+
+	call	@#setreg	; setup registers for read/write. input=r2,r3,unit/track/gead/sector
+
+	call	@#readsc	; read one or many sectors
+	bcs	9$		; error exit
+	; now "prwlen" words have been read into "rspdat". advance r3
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+	mov	@#prwlen,r2	; wordcount to read
+	add	r2,r3
+	add	r2,r3		; r3 += byte count
+
+	; exit without error, but optionally suppress data
+	; -- writing output params destroys input params!
+	tst	@#flgchk
+	beq	1$
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+1$:
+	clc			; clear error flag
+9$:
+	jmp	@#doresp	; r3 = end of buffer
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	; r3 = pointer in result buffer = data area of request block 1
+
+	mov	#105,r5 	; error location
+	mov	@#req1dt,r3	; r3 = data of request data block 1
+	mov	@#req1wc,r2	; r2 = word count to write
+	mov	(r2),r2 	; r2 is addr of len
+	call	@#setreg	; setup registers for read/write. input=r2,r3
+
+	mov	#107,r5 	; error location
+	call	@#writsc	; write one or many sectors
+	bcs	9$		; error exit
+
+	; exit without error and without response data
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+
+; -------- check for error
+; 1) checks error bits in rkcs
+; 2) if error: return 4 registers
+; r5 must contain error location
+; result: 1st word = rkds, 2nd word=rker. 3rd= rkcs, 4th=rkda
+chkerr:
+	; verify controller ready
+0$:	tstb	rkcs(r4)	; test for "controller ready"
+	bpl	0$		; wait
+
+	mov rkcs(r4),r0
+	bmi	1$		; bit 15 = Any error
+
+	clc
+	return			; CSR = R1 = 0: no error
+
+1$:	; error!
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	; result status = error location
+	mov	#4,(r3)+	; 4 error words following
+
+	mov	rkds(r4),(r3)+	; 1st word = rkds
+	mov rker(r4),(r3)+	; 2nd word=rker.
+	mov rkcs(r4),(r3)+	;3rd= rkcs,
+	mov rkda(r4),(r3)+	; 4th=rkda
+	sec			; error flag
+	return
+
+
+	; --------------------------------------------------
+	; setreg
+	; set up controller registers:
+	; fills DA with cylinder, head, sector
+	; sets BA with address R3
+	; sets WC
+	;
+	; r2 = word count (not complemented)
+	; r3 = buffer address
+	;	   read: r3 = response buffer
+	;	   write: r3 = request buffer 1
+	; r4 = controller base
+	; r5 = error location
+setreg:
+	; --- setup disk address
+	mov	@#prunit,r1	; 3 bit drive select -> bits <15:13>
+	bic	#177770,r1		; r1 &= 07
+	clc
+	ror	r1		; rotate <2:0> into <15:13> through carry
+	ror	r1
+	ror	r1
+	ror	r1
+	mov	@#prcyl,r0	; 8bit cylinder addr -> bits <12:5>
+	bic	#177400,r0	; r0 &= 0377
+	asl	r0
+	asl	r0
+	asl	r0
+	asl	r0
+	asl	r0
+	bis	r0,r1
+	mov	@#prhead,r0
+	beq	1$
+	bis	#20,r1		; head 1: set bit 4 "SUR"
+1$:
+	mov	@#prsect,r0
+	bic	#177760,r0	; r0 &= 017
+	bis	r0,r1		; add to result
+	mov	r1,rkda(r4)
+
+	; --- setup word count
+	mov	r2,r1		; r1 = word count
+	neg	r1
+	mov	r1,rkwc(r4)	; 2s complement
+
+	; --- setup data bus address
+	mov	r3,rkba(r4)
+	; address extension bits <5:4> MEX in rkcs must be 0
+
+	return
+
+
+
+;-----------------------------------------------------------------------
+	; readsc - read sectors
+	; r4 is controller base addr
+	; r5 is error location
+	; setreg must have been run
+readsc: 	; read sectors
+	mov	#fnread,rkcs(r4)	; read and GO
+
+0$:	tstb	rkcs(r4)	; check controller ready
+	bpl	0$		; loop while 0
+
+1$:	bit	#100,rkds(r4)	; wait for Read/Write/seek READY
+	beq	1$
+
+	call	@#chkerr	; carry = error
+	return
+
+
+	;-----------------------------------------------------------------------
+	; writsc -write sectors
+	; r4 is controller base addr
+	; R5 = error location
+writsc: 	; write sectors
+	mov	#fnwrit,rkcs(r4)	; write and GO
+
+0$:	tstb	rkcs(r4)	; check controller ready
+	bpl	0$		; loop while 0
+
+1$:	bit	#100,rkds(r4)	; wait for Read/Write/seek READY
+	beq	1$
+
+	call	@#chkerr	; carry = error
+	return
+
+
+	.include		 pdp11gui_aux.mac
+
+	.include		 pdp11gui_serialxfer.mac
+
+	.end

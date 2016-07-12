@@ -1,0 +1,347 @@
+	.title	PDP11GUI RX01 sector loader/writer for RX11 controller
+
+	; This code reads or writes sectors from a RX01 into memory
+	; It is used by PDP11GUI to access a RX01 disc
+	;
+	; See
+	;   RX8,RX11 floppy disk system user's guide (Nov 1976, EK-RX01-OP-001).pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; call conventions, stack, entry points: see "pdp11gui_main.mac"
+
+	; framework
+	.include	pdp11gui_main.mac
+
+
+	; Flags in parameter "prflags": not used
+
+	; prtrack is 0..76dec
+	; prhead is always 0!
+	; prsector is 0..25. NOT 1..26 !
+
+	; error fields in output block buffer for hardware errors
+	; location info must be written to result status "ressta"
+	; use r3 aus data pointer
+errcs	=	xmbuff+4	; +0=opcode, +2=len, +4 = param 0 of block 0: RXCS register
+
+	; controller register offsets against base address
+rxcs	=+0		; control/status
+rxdb	=+2		; universal r/w gate
+rxta	=+2		; rx track address (0-114oct = 0-76dec)
+rxsa	=+2		; rx sector address (1-32oct = 1-26 dec)
+rxes	=+2		; rx error and status
+
+; bits in rxcs
+bcsgo	= 1		; GO
+bcsusel = 20		; UNIT SELECT
+bcsdone = 40		; DONE
+bcsie	= 100		; Interrupt enable
+bcstr	= 200		; Transfer Request
+bcsinit = 40000 	; RX INIT
+bcserr	= 100000	; ERROR
+
+; bits in rxes
+bescrc	=	1	; CRC
+bespe	=	2	; Parity error
+besid	=	4	; Initialization Done
+besdd	=	100	; Deleted Data Detected
+besrdy	=	200	; Drive Ready
+
+; command opcodes in bit 3:1 in rxcs. already shifted, and GO bit 0 is also set
+cmfilbf =0+1		; fill buffer
+cmempbf =1*2+1		; empty(=read) buffer
+cmwrsec =2*2+1		; write sector
+cmrdsec =3*2+1		; read sector
+cmrdsta =5*2+1		; read status
+cmwrdel =6*2+1		; write deleted data sector (not used)
+cmrderr =7*2+1		; read error register
+
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+
+
+; --------------- entry for "get drive information --------------------
+; reset drive
+
+doinit: 	; issue RX INITIALIZE
+		; drive 1 to track 0, drive 0 to track 1, sector 1 of drive 0 read into buffer
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#bcsinit,r0	;
+	mov	r0,rxcs(r4)
+	; wait until DONE
+	clc			; clear error flag
+	mov	#101,r5 	; error location #101
+1$:
+	bit	#besid,rxes(r4) ; loop until INITIALIZATION DONE
+	bne	9$		; done
+	call	@#chkerr	; test error flag and set r0..r4
+	bcc	1$		; no error, wait again
+9$:
+	jmp	@#doresp
+
+
+; --------------- entry for read and / check--------------------
+
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	; r3 = pointer in result buffer = data area of response block 0
+	mov	#rspdat,r3 ; = data of block 0
+	; r2 = word counter
+	mov	@#prwlen,r2
+1$:	; sector loop
+	; inc sector address, dec word count parameter
+	mov	#cmrdsec,r0	; function is "read sector"
+	call	@#rwsect	; read track/sector into drive internal buffer
+	bcs	9$		; error exit
+	; transfer sector buffer from drive into data buffer at r3
+	; read and write protocol is identical handled by "rwbuf1()
+	mov	#cmempbf,r0	; function is "empty buffer"
+	call	@#rwbuf1	; RX01. inc r3, dec r2
+	bcs	9$		; error exit
+	; check: word count reached?
+	tst	r2
+	ble	4$		; r2 <= 0 ? then  exit with valid data
+	inc	@#prsect	; next sector
+	br	1$
+
+4$:	; exit without error, but optionally suppress data
+	; suppress data output?
+	; -- writing output params destroys input params!
+	tst	@#flgchk
+	beq	5$
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+5$:
+	clc			; clear error flag
+9$:
+	jmp	@#doresp	; r3 = end of buffer
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	; r3 = pointer in result buffer = data area of request block 1
+	mov	@#req1dt,r3	; r3 = data of block 1
+	mov	@#req1wc,r2	; r2 = word count
+	mov	(r2),r2 	; r2 is addr of len
+
+1$:	; sector loop
+	; transfer data from data buffer at r3 into drive sector buffer
+	; read and write protocol is identically handled by "rwbuf1()
+	mov	#cmfilbf,r0	; function is "fill buffer"
+	call	@#rwbuf1	; RX01. inc r3, dec r2
+	bcs	9$		; error exit
+
+	mov	#cmwrsec,r0	; function is "write sector"
+	call	@#rwsect	; write drive internal buffer onto track/sector
+	bcs	9$		; error exit
+	; check: word count reached?
+	tst	r2
+	ble	4$		; r2 <= 0 ? then  exit with valid data
+	inc	@#prsect	; next sector
+	br	1$
+4$:	; exit without error
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+
+
+	; --------------------------------------------------
+	; rwsect subroutine
+	; read or writes one single sector into disc drive buffer
+	; r0 = function: #cmrdsec = "read sector"
+	;		 #cmwrsec = "write sector"
+	; r4 is controller base addr
+	; --------------------------------------------------
+rwsect:
+	; read one sector from floppy surface into drive internal buffer.
+	; assemble command word in r0
+	; r0 = function select
+	bis	#bcsgo,r0	; set "GO" bit
+
+	tst	@#prunit	; unit 0 or 1?
+	beq	1$		; nop if unit=0, else ...
+	bis	#20,r0		; ...  set UNIT SEL flag
+1$:
+	mov	r0,rxcs(r4)	; GO!
+	mov	#101,r5 	; error location #101
+	call	@#waittr	; wait for TR
+	bcs	9$		; error exit
+
+	; load sector address
+	mov	@#prsect,r0
+	inc	r0		; (make 0..25 -> 1..26)
+	mov	r0,rxsa(r4)	; set sector address
+	mov	#102,r5 	; error location #102
+	call	@#waittr	; wait for TR
+	bcs	9$		; error exit
+	; load track address
+	mov	@#prcyl,r0
+	mov	r0,rxsa(r4)	; set track address
+
+	mov	#103,r5 	; error location #103
+	call	@#waitdn	; wait for DONE. Stop on error
+	bcs	9$		; error exit
+
+	; final error check
+	mov	#3,r5		; error location #3
+	call	@#chkerr	; returns error flag
+
+9$:
+	return
+
+
+	; --------------------------------------------------
+	; rwbuf1 subroutine
+	;"read or write buffer" -  transfer sector data between memory and drive internal buffer
+	; r0 = function: #cmempbf = "empty buffer"
+	;		 #cmfilbf = "fill buffer"
+	; r1 is local word/byte counter
+	; r2 is global word count, gets decremented
+	; r3 is global buffer pointer, gets incremented
+	; r4 is controller base addr
+	; sector size depends on double density flag: 128/256 bytes
+	; rwbuf1 is getbuf for RX11 / RX01
+	; --------------------------------------------------
+	;RX01: program loop
+
+rwbuf1:
+	; r0 = function select. GO bit already set
+	; r3 = write pointer, r1 = byte counter, r2 = global word count
+	; unit number does not matter and is always 0
+	mov	r0,rxcs(r4)	; go
+
+	; "read or write" in byte loop is controlled by r0:
+	; r0 = function: #cmempbf = "empty buffer" = read sector
+	;		 #cmfilbf = "fill buffer" = write buffer
+
+	clr	r1		; byte count
+	cmp	r0,#cmempbf	; "empty buffer" /read ?
+	beq	rwbufr		; "empty" = read buffer
+
+rwbufw: ; write buffer
+	mov	#204,r5 	; error location #204
+;	call	@#waittr	; wait for TR
+;	bcs	9$		; error exit
+1$:
+	bit	#bcstr,rxcs(r4) ; test for transfer request flag
+	bne	2$		; bne if transfer flag is set
+	bit	#bcsdone,(r4)	; test DONE bit
+	beq	1$		; beq if DONE not set
+	br	rwbufe		; jump to exit handler
+2$:	; move data
+	movb	(r3)+,rxdb(r4)	; write next data byte(!)
+	inc	r1		; byte count
+	br	1$		; loop
+
+rwbufr: ; read buffer
+	mov	#205,r5 	; error location #205
+;	call	@#waittr	; wait for TR
+;	bcs	9$		; error exit
+1$:
+	bit	#bcstr,rxcs(r4) ; test for transfer request flag
+	bne	2$		; bne if transfer flag is set
+	bit	#bcsdone,(r4)	; test DONE bit
+	beq	1$		; beq if DONE not set
+	br	rwbufe		; jump to exit handler
+2$:	; move data
+	movb	rxdb(r4),(r3)+	; read next data byte(!)
+	inc	r1		; byte count
+	br	1$		; loop
+
+rwbufe: ; done!
+	; byte count r1 should now be 128d = 200o
+	asr	r1		; byte count -> word count
+	sub	r1,r2		; dec global word counter
+
+	; final error check
+	mov	#5,r5		; error location #5
+	call	@#chkerr	; returns error flag
+9$:
+	return
+
+
+
+; --------------- waittr --------------------
+; wait for TR bit in RXCS.
+; r4 is controller base addr
+; r5 = location info
+waittr: ; wait for TR
+1$:
+	call	@#chkerr	; unexpected error?
+	bcs	9$		; yes: exit with error
+	bit	#bcstr,rxcs(r4) ; TR flag?
+	beq	1$		; not ready, wait
+	clc			; clear error flag
+9$:
+	return
+
+; --------------- waitdn --------------------
+; wait for DONE
+; r5 = location info
+; does full error exit
+waitdn:
+1$:
+	call	@#chkerr	; unexpected error?
+	bcs	9$		; yes: exit with error
+	bit	#bcsdone,rxcs(r4)
+	beq	1$		; not ready, wait
+	clc			; clear error flag
+9$:
+	return
+
+
+; --------------- chkerr --------------------
+; check RX01 error flags and error status.
+; if DONE, then RXES is accessible.
+; r5 is already location info
+; set rxbuff to error response and carry on exit if error
+; exit: r3: points to word after buffer end
+chkerr:
+	tst	rxcs(r4)	; test bit 15 = ERROR
+	bmi	1$
+	clc			; no error: clear exception flag
+	return
+
+1$:	; error
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	; result status = error location
+	mov	#1,(r3)+	; 1 error word following
+	mov	rxes(r4),(r3)+	; error code RXES register
+	; RXES bits: (* = only RX02)
+	;   7= 200=DRV RDY;"Drive Ready. Current drive unit exists, has power, has diskette, door is closed and is upto speed"
+	;   6= 100=DD;"Deleted Data Detected. During data recovery, ID mark preceeding data was decoded as 'deleted data'"
+	;   2=	 4=ID;"Initialize Done. Asserted to indicate completion of Initalize.(also on power failures or UNIBUS reset)"
+	;   1=	 2=Parity error
+	;   0=	 1=CRC;"CRC Error. Checksum failure while retrieving data from data field of the diskette"
+
+	; other error registers are 0
+	; later a "READ ERROR REGISTER" command could be issued here
+	; this gives 1 word of info for RX01, and 4 words for RX02
+	sec			;  error: set exception flag
+	return
+
+
+	.include	     pdp11gui_aux.mac
+
+	.include	     pdp11gui_serialxfer.mac
+
+	.end

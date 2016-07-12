@@ -1,0 +1,514 @@
+    .title  serialxfer
+
+    ; high speed buffer	access over serial port	0
+    ;
+    ; Compression:
+    ; like uuencode / base64
+    ; Each serial char defines 6 bits, char is in range	0x20 ..	0x5f
+    ; 8	chars defines 3	words
+    ; Char #	:  <.0..> <..1..> <..2..> <.3..> <.4..>	<..5..>	<..6..>	<.7..>
+    ; Char Bits	:  543210 54 3210 5432 10 543210 543210	54 3210	5432 10	543210
+    ; bytes	:  765432 10 7654 3210 76 543210 765432	10 7654	3210 76	543210
+    ; byte #	:  <...0...> <...1...> <...2...> <..3....> <...4...> <...5...>
+    ; word #	:  <...msb0....lsb0..> <...msb1....lsb1..> <..msb2.....lsb2..>
+    ;
+    ; bytes	:  000000 00 0000 0000 76 543210 765432	10 7654	3210 76	543210
+
+    ; Layer1: Complete transmission format, encodes a list of 16 bit words
+    ;	<STARTCHAR> [<RLECHAR>]	<char octet> ...  <ENDCHAR>
+    ;
+    ; -	characters ' ' = 0x20 =	040 to '_' = 0x5F = 0137 encode	data
+    ; -	characters below #$20 are to be	ignored
+    ; -	'{' = 0x7b = 0173 is STARTCHAR,	 '}' = 0x7D = 0175 is ENDCHAR
+    ; - all other chars instead of START are ignored. '~' is used as delay char.
+    ; -	RLE encoding: indicator	char RLECHAR '|' before	char[0]	modifies the meaning of
+    ;	the next 8 char/3 word block:
+    ;	'|', char[0], ... char[7] => RLE, word[0], word[1], word[2]
+    ;	with word[0] = repeat, word[1] = value,	word[2]	= don't	care
+    ; -	RLE Block length processing time:
+    ;	 PDP-11	CPU must copy <blocklen> words within one character transmission time.
+    ;	 blocklen is limited by	high baudrates and slow	CPUs.
+    ;    processing time per RLE block: 100 cycles fix, + 6 micros per word copy
+    ;    Time of one char transmission:
+    ;      38400 baud , 10 bit/char:  t = 1000000/38400*10 = 260 micro sec per char
+    ; -	after {	and before first data char, the	16 bit sum of all data words
+    ;	in buffer is send
+    ; -	transmit
+    ;	1. send	<CR> {
+    ;	2. send	data octets
+    ;	3. send	"} <CR>"
+    ; -	receive:
+    ;	1. discard characters, until "{" is received
+    ;	3. receive and decode char-octets, until '}' is	received
+    ;	4. discard "}"
+    ;
+    ;  For blockread,write, this convention is used:
+    ;  - Operation is always
+    ;	 1. receive data
+    ;	 2. execute code
+    ;	 3. transmit data
+    ;
+    ;  BlockRead:
+    ;  1. receive checksum word
+    ;  2. receive block	of 6 words, wich contain values	for R0..R5
+    ;  3. start	BlockRead-Procedure with R0..R5
+    ;  4. send block of	checksum + 6 + bufferlen words.
+    ;	    word[0] is checksum, words[1..6] contain exit values for R0..R5
+    ;  BlockWrite
+    ;  1. receive block	of 1 +6	+ bufferlen words,
+    ;  2. start	BlockWrite-Procedure with R0..R5 and write buffer
+
+    ; This source get's	.INCLUded, so define no	offset!
+    ;
+
+;     .asect
+;     .=1400
+
+    ; --------------------------------------------------
+
+
+
+
+    ; --------------------------------------------------
+    ;	BLKRCV - block receive
+    ;	Receive	coded characters, and save resulting words in buffer
+    ;	Input
+    ;	Result:	buffer at "rxbffr" filled with triplets
+    ;	rxbfcs checksum	as transmitted
+    ;	rxbfln = word count as received
+blkrcv:
+; mov #100000,r2 ; trace rcv chars
+
+	mov	#xmbffr,r0	; start	of buffer frame
+	clr	r1		; counter
+	; test daten
+;	mov	#201,r1	   ; test data word count =  129 = 0x81
+;	mov	#rcvtst,r2 ; ptr to test data
+
+	; wait for '{' == 173
+0$:
+	call	@#rcvchr
+	cmpb	#'{,r5
+	bne	0$
+
+1$:			   ;	do {
+	clr	r2		; clear	RLE indicator
+	clr	r4		; assemble word[0]
+	call	@#rcvbit   ; r5	= char[0]
+	bcs	3$	   ; carry set:	end
+	bvc	2$	   ; overflow not set: receive 3 literal words
+	; RLE indicator: next 3	words are <repeat> <value> <don't care>
+	inc	r2	   ; set RLE indicator
+	call	@#rcvbit   ; receive again: r5 = char[0]
+	bcs	3$	   ; carry set:	end
+2$:
+	mov	#12,r3
+	call	@#sl5or4   ; r4	|= (r5 << 10)
+	call	@#rcvbit   ; r5	= char[1]
+	bcs	3$	   ; carry set:	end
+	mov	#4,r3
+	call	@#sl5or4   ; r4	|= (r5 << 4)
+	call	@#rcvbit   ; r5	= char[2]
+	bcs	3$	   ; carry set:	end
+	mov	#2,r3
+	call	@#sr5or4   ; r4	|= (r5 >> 2)
+	mov	r4,(r0)+   ; word[0] fertig
+	inc	r1
+
+	clr	r4	   ; assemble word[1]
+	mov	#16,r3
+	call	@#sl5or4   ; r4	|= (r5 << 14)
+	call	@#rcvbit   ; r5	= char[3]
+	bcs	3$	   ; carry set:	end
+	mov	#10,r3
+	call	@#sl5or4   ; r4	|= (r5 << 8)
+	call	@#rcvbit   ; r5	= char[4]
+	bcs	3$	   ; carry set:	end
+	mov	#2,r3
+	call	@#sl5or4   ; r4	|= (r5 << 2)
+	call	@#rcvbit   ; r5	= char[5]
+	bcs	3$	   ; carry set:	end
+	mov	#4,r3
+	call	@#sr5or4   ; r4	|= (r5 >> 4)
+	mov	r4,(r0)+   ; word[1] fertig
+	inc	r1
+
+	clr	r4	   ; assemble word[2]
+	mov	#14,r3
+	call	@#sl5or4   ; r4	|= (r5 << 12)
+	call	@#rcvbit   ; r5	= char[6]
+	bcs	3$	   ; carry set:	end
+	mov	#6,r3
+	call	@#sl5or4   ; r4	|= (r5 << 6)
+	call	@#rcvbit   ; r5	= char[7]
+	bcs	3$	   ; carry set:	end
+	mov	#0,r3
+	call	@#sl5or4   ; r4	|= (r5 << 0)
+
+	mov	r4,(r0)+
+	inc	r1
+
+	; 3 words received. Interpret as RLE?
+	tst	r2		; if (!is_rle)
+	beq	1$		;     continue ;
+	; last triplett	was RLE	block, not 3 data words
+	sub	#6,r0		; remove last triplett from data buffer
+	sub	#3,r1
+	mov	r1,r5		; save r1=word count
+	mov	(r0),r4		; r4 = rle_count
+	mov	2(r0),r1	; rle_value
+	mov	r4,r2		; count=rlw_count
+	call	@#memset	; r0=ptr, r1 = value, r2=count.
+	; r0 is	now at next unwritten buffer pos, r2=0
+	mov	r5,r1		; restore word count
+	add	r4,r1		; word count +=	rel_count
+	br	1$		; } while(! aborted)
+
+3$:	; end of transmission
+	; r1 is	actual word count, it could be
+	; checked here against transmitted word	count
+
+	; checksum must	be processed by	caller
+	clc			; clear	error flag
+
+	return
+
+
+
+
+
+    ; --------------------------------------------------
+    ;	BLKXMT - block transmit
+    ;	Get words from buffer and send as coded	characters
+    ;	Input:
+    ;	rxbfwc = total size (len+checksum+opcode+params+data)
+    ;	Result:
+    ;	R0: buffer address (overwritten)
+    ;	R1: word count (multiple of 3)
+
+rsp0en:	.blkw	1	; pointer to word after nd of block 0
+
+blkxmt:
+	; clear	out fill words at buffer end
+	mov	@#xmwc,r0	; wordcount without len
+	inc	r0
+	asl	r0		; r0 = byte len	of buffer without fill chars
+	add	#xmbffr,r0	; r0 = bufferend
+	mov	r0,@#rsp0en	; save end of buffer
+	clr	(r0)+		; clear	next 3 words
+	clr	(r0)+
+	clr	(r0)+
+
+	; calculate and	save checksum
+	call	@#calccs
+	mov	r0,@#xmcs
+
+	mov	#xmbffr,r0     ; transmit
+	mov	@#xmwc,r1
+	add	#2,r1		; transmit word	count, checksum, rxbuff
+
+	; sende	<cr>,{
+	mov	#15,r5
+	call	@#xmtchr   ; send cr
+	mov	#'{,r5		; 173
+	call	@#xmtchr   ; send start	character '{'
+
+1$:			   ;	do {
+
+	; try rle compression of next data words
+	; r5 = word after buffer end
+	mov	@#rsp0en,r5	; r5 = ptr to word after data buffer end
+	call	@#encrle	; encode rle compression, data r0, count = r1, r5 = limit
+	bcs	2$		; if not successful: r0, r1 unchanged, carry not set
+	; rle compression successful.
+;   r0 += blocklen-3 (last 3 word in buffer at rle end are used	as buffer
+;	for rle	triplett.
+;   triplett[r0] contains rle triplett.
+;   r1 -= rle_count
+	add	#3,r1		; // subroutine	trpxmt decrments r1
+
+
+   ; rle triplett was written into data	buffer at r0.
+	mov	#'|,r5
+	call	@#xmtchr       ; transmit '|': rle indicator
+
+   2$:	; send next simple data	triplett, or rle triplet
+
+       call	@#trpxmt	; transmit triple (= 3 words) from r0
+
+3$:	; simple triplett or rle triplett send
+	tst	r1
+	bgt	1$	   ; } while(count > 0)
+
+	mov	#'},r5		; 175
+	call	@#xmtchr   ; send end character	'}'
+
+; Wartepause, damit bei	kommendem HALT der serial xmt buffer frei ist?
+; bewirkt receive timeout??
+;	call	@#wait64k	; wait ca. 64 millisek
+	clc			; clear	error flag
+	return
+
+	; --------------------------------------------------
+	; trpxmt - TRiPle TransMT
+	; encode and transmit next triple = 3 words from r0
+	; globals:	r0: dta	ptr,  inkremented += 3
+	;		r1: count,  -= 3
+	; r3,r4,r5 : changed, scratch
+	;
+trpxmt:
+	mov	(r0)+,r4   ; r4	= word[0]
+	dec	r1	   ; count--
+	mov	#12,r3
+	clr	r5
+	call	@#sr4or5   ; r5	= (r4 >> 10) & 0x3f
+	call	@#xmtbit   ; send char[0]
+	mov	#4,r3
+	clr	r5
+	call	@#sr4or5   ; r5	= (r4 >> 4) & 0x3f
+	call	@#xmtbit   ; send char[1]
+	mov	#2,r3
+	clr	r5
+	call	@#sl4or5   ; r5	= (r4 << 4) & 0x3f // set upper	4 bits of r5
+
+	mov	(r0)+,r4   ; r4	= word[1]
+	dec	r1	   ; count--
+	mov	#16,r3
+	call	@#sr4or5   ; r5	|= (r4 >> 14) &	0x3f //	set lower 2 bits of r5
+	call	@#xmtbit   ; send char[2]
+	mov	#10,r3
+	clr	r5
+	call	@#sr4or5   ; r5	= (r4 >> 8) & 0x3f
+	call	@#xmtbit   ; send char[3]
+	mov	#2,r3
+	clr	r5
+	call	@#sr4or5   ; r5	= (r4 >> 2) & 0x3f
+	call	@#xmtbit   ; send char[4]
+	mov	#4,r3
+	clr	r5
+	call	@#sl4or5   ; r5	= (r4 << 4) & 0x3f // set upper	2 bits of r5
+	mov	(r0)+,r4   ; r4	= word[2]
+	dec	r1	   ; count--
+	mov	#14,r3
+	call	@#sr4or5   ; r5	|= (r4 >> 12) &	0x3f
+	call	@#xmtbit   ; send char[5]
+	mov	#6,r3
+	clr	r5
+	call	@#sr4or5   ; r5	= (r4 >> 6) & 0x3f
+	call	@#xmtbit   ; send char[6]
+	mov	#0,r3
+	clr	r5
+	call	@#sr4or5   ; r5	= r4  &	0x3f
+	call	@#xmtbit   ; send char[7]
+	return
+
+
+; --------------------------------------------------
+; sr5or4
+; sl5or4
+; shift	r5 by r3 left/right and	OR to r4
+; r5 not changed
+sl5or4:
+	mov	r5,-(sp)
+	tst	r3	   ; while(r3) {
+1$:
+	beq	2$
+	clc		   ; clr carry
+	rol	r5	   ; r5	<<=1
+	dec	r3
+	br	1$	   ;  }
+2$:
+	bis	r5,r4	   ; r4	|= r5
+	mov	(sp)+,r5
+	return
+
+sr5or4:
+	mov	r5,-(sp)
+	tst	r3	   ; while(r3) {
+1$:
+	beq	2$
+	clc		   ; clr carry
+	ror	r5	   ; r5	>>=1
+	dec	r3
+	br 1$		   ;  }
+2$:
+	bis	r5,r4	   ; r4	|= r5
+	mov	(sp)+,r5
+	return
+
+
+; --------------------------------------------------
+; sr4or5
+; sl4or5
+; shift	r4 by r3 left/right and	OR bits	5..0 to	r5
+; r4 not changed
+sr4or5:
+	mov	r4,-(sp)
+	tst	r3	   ; while(r3) {
+1$:
+	beq	2$
+	clc		   ; clr carry
+	ror	r4	   ; r4	>>= r3
+	dec	r3
+	br	1$	   ;  }
+2$:
+	bic	#300,r4
+	bis	r4,r5	   ; r5	|= (r4 & 0x3f)
+	mov	(sp)+,r4
+	return
+
+sl4or5:
+	mov	r4,-(sp)
+	tst	r3	   ; while(r3) {
+1$:	beq	2$
+	clc	; clr carry
+	rol	r4	   ; r4	<<= r3
+	dec	r3
+	br	1$	   ;  }
+2$:
+	bic	#300,r4
+	bis	r4,r5	   ; r5	|= (r4 & 0x3f)
+	mov	(sp)+,r4
+	return
+
+
+
+	; ---------------------------------------------------
+	;   calccs
+	;   calculate sum of all data words in buffer "rxbuff"
+	;	(without checksum itself)
+	;	and return in r0
+	;  changes r0, r1, r2
+calccs:
+	clr	r0
+	mov	#xmbuff,r2	; r2 point to second word of buffer, after checksum
+	mov	@#xmwc,r1	; r1 = word counter, includes checksum
+	dec 	r1
+	beq	9$		; r1 ==	0: exit
+1$:
+	add	(r2)+,r0	;
+	dec	r1
+	bne	1$		 ; loop	while r1 > 0
+9$:
+	return
+
+
+	; ---------------------------------------------------------
+	; encrle
+	; try to ENCode	data at	r0 as RLE block
+	; r0: pointer into buffer
+	; r5: pointer to word after buffer end
+	; return
+	; carry	clear: compression succesfull
+	;	r0 points to
+	;	rle triplett: <repeat> <dataword> 0 is written diretly befotre
+	;	the next uncompressable	word in	data buffer:
+	;	r0 points to rle triplett.
+	;	r1 is decremented by rle block len
+	; carry	set : compression unsuccessful:
+	;	less than 3 equal data words.
+	;	data and r0, r1	unchanged
+	;
+	; Since	buffer data is overwritten with	rle triplett,
+	; rle must find	at least 3 equal data words.
+encrle:	; encode rle compression, data r0, count = r1
+;	sec ; disable RLE encoding
+;	return
+
+	; limit: rle block len max 256
+	mov	r0,r2		; r2 = data ptr
+	mov	#1,r3		 ; repeat counter
+	mov	(r2)+, r4	; r4 = data word equal in block
+	; loop,	until
+1$:
+	; r2 still inside of buffer?
+	cmp	r2,r5
+	bhis	2$		 ; stop, if r2 reached end of buffer
+
+	cmp	(r2),r4	       ; next data word	still of same value?
+	bne	2$		; next data word != reference: end compression loop
+	; next word still equal
+
+	tst	(r2)+		; inc r2
+	inc	r3		; count	repeat
+	; limit	len of rle blocks. PC CPU must decompress whole	block within
+	; one character	receive	time. PD11 CPU can 32 loops, modern x86	surely > 1000
+	cmp	r3,#377		; more than 256	equal words?
+	ble	1$		; no: try again
+
+2$:	; end of compression loop
+	cmp	r3,#3
+	ble	4$		; to few data compressed: compression failure
+
+	; compression success:
+	; overwrite data buffer	with rle triplett:  <repeat> <data> 0
+	mov	r2,r0
+	sub	#6,r0		; point	r0 to triplet directly before end of block in data buffer
+				 ; sub #6: triplett len
+	sub	r3,r1		 ; r1 =	words left in buffer
+
+	mov	r3,0(r0)	  ; repeat count
+	mov	r4,2(r0)	  ; data word
+	clr	4(r0)		  ; filler
+	clc			; clear	carry
+	br	9$
+4$:    ;compression failure
+	sec			; set carry
+9$:	; exit
+	return
+
+
+	; ----------------------------------------
+	; doecho	- block	transfer test
+	; empfang, bufferwords um 1 erhöhen, senden
+	; works	on block 0, which has format <len> <data ...>
+	; before
+doecho:
+	; called by framework, buffer is received and checked
+	mov	@#req0dt,r3	; buffer base	of block 0
+	mov	@#req0wc,r1	; len of block 0
+	mov	(r1),r1		; req0wc is address of len
+	beq	9$		; buffer len = 0?: exit
+	; complement every word	in buffer (checksum is recalculated)
+1$:
+	com	 (r3)+
+	dec	r1
+	bne	1$
+9$:
+	; response buffer = request buffer
+	clc			; no error.
+	; r3 = point to word after result buffer
+	jmp	@#doresp
+
+
+	; ---------------------------------------------------
+    ; Select serial low level I/O driver
+    .include    pdp11gui_serialio_dl11.mac
+    ; .include    pdp11gui_serialio_k8060.mac
+
+
+
+	; ---------------------------------------------------
+	; rxbuff - receive transmit buffer
+	; - data part are remaining words.
+
+; debugging: buffer immer an der selben adresse
+	. = 014000
+
+; ------- transmission buffer header ---------------------------
+xmbffr	=	.		; base for buffer frame
+xmwc:	.blkw	1		; transmission wordcount: exact	wordcount, excluding len itself	and checksum, but including opcode
+xmcs:	.blkw	1		; transmission checksumbuffer-2: buffer	checksum. checksum of all data words in	rxbuff
+xmbuff	=	.		; base for buffer payload
+				; buffer is max	2 blocks: 1st =	8 parameters, 2nd = 16kwords drive data	long
+				; Buffer is located at end of code, can	grow up	tu 48kbyte boundary
+; ------- transmission buffer data ---------------------------
+	.blkw	10		; approx space for opcode + parameters,	maybe more or less
+	.blkw	40000
+				; data part of buffer for 16 kWords = 32 kBytes
+				; addr is approx 13000
+				; if machine has only 32kBytes,	mem end	is at word addr	40000,
+				; and buffer can keep 040000-013000 = 025000 = 10752d words
+xmbufe  =	.		; End address
+	.blkw	10		; extra	space, to fill triplets
+

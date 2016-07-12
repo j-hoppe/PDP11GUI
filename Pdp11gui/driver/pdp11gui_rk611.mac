@@ -1,0 +1,297 @@
+	.title	PDP11GUI RK06/RK07 sector loader/writer for RK611 controller
+
+	; This code reads or writes one sector from a RK*-drive into memory
+	; It is used by PDP11GUI to access a RK*- discs
+	;
+	; RM drives can seek within transfers, so word transmit size is not critical.
+	;
+	; See
+	;   RK06-RK07 Disk Drive User's Manual (February 1978, EK-RK067-UG-001).pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; call conventions, stack, entry points: see "pdp11gui_main.mac"
+
+	; framework
+	.include	pdp11gui_main.mac
+
+	; Flags in parameter "prflags":
+	;		0 = suppress read,
+	;		1 = "DriverDeviceType": 0 = RK06, 1 = RK07
+
+	; prtrack is 0..814
+	; prhead is 0..3
+	; prsect = 0..22
+
+	; error fields in output block buffer for hardware errors
+	; location info must be written to result status "ressta"
+	; use r3 aus data pointer
+
+;rmcsr	=177440 	; std RK611 csrbase
+rkcs1	=+0		; control/status register ONE
+rkcs2	=+10		; control/status register TWO
+rkwc	=+2		; word count (load negative)
+rkba	=+4		; bus address
+rkda	=+6		; disk address: desired track+sector
+rkds	=+12		; drive status
+rker	=+14		; error register
+rkdc	=+20		; disk address: desired cylinder
+rkof	=+16		; offset
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+
+; --------------- entry for "get drive information --------------------
+; reset controller
+
+doinit: 	; RK611 executes "Get Status" with Reset
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#rspdat,r3	; if no error: return no data
+	mov	#101,r5 	; error location #101
+
+ 	mov	#100000,rkcs1(r4) ; reset controller
+
+	clr	r0
+	call	@#go		; start "Drive Select"
+	mov	#2,r0
+	call	@#go		; start "Drive Clear"
+	mov	#1,r0
+	call	@#go		; start "Pack Acknowledge"
+
+	; exit without error, and without response data
+	call	@#chkerr	; permanent errors ?
+	; carry is error flag
+
+	jmp	@#doresp
+
+
+; --------------- entry for read --------------------
+
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#102,r5 	; error location
+	mov	#rspdat,r3	; r3 = start of result block
+	mov	@#prwlen,r2	; wordcount to read
+	call	@#initrw	; setup registers for read/write
+	bcs	9$		; error exit
+
+	mov	#103,r5 	; error location
+	call	@#readsc	; read one or many sectors
+	bcs	9$		; error exit
+
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+	; suppress data output?
+	tst	@#flgchk
+	bne	1$
+	; flag is 0: do not suppress data transmission
+	; r2 words were read
+	mov	@#prwlen,r2	; wordcount to read
+	add	r2,r3
+	add	r2,r3		; r3 += byte count
+
+1$:
+	clc			; clear error flag
+
+9$:
+	jmp	@#doresp
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#104,r5 	; error location
+	mov	@#req1dt,r3	; r3 = data of request data block 1
+	mov	@#req1wc,r2	; r2 = word count to write
+	mov	(r2),r2 	; r2 is addr of len
+
+	call	@#initrw	; setup registers for read/write. r2..5 not changed
+	bcs	9$		; error exit
+
+	mov	#105,r5 	; error location
+	call	@#writsc	 ; write one or many sectors. r2..5 not changed
+	bcs	9$		; error exit
+
+	; verify
+	mov	#106,r5 	; error location
+				; r3 = start of result block, r2 = len still valid
+	call	@#initrw	 ; setup registers for read/write. r2..5 not changed
+	bcs	9$		; error exit
+
+	mov	#107,r5 	; error location
+	call	@#cheksc	; check one or many sectors
+	bcs	9$		; error exit
+
+	; exit without error, and without response data
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+
+; -------- check for error
+; 1) checks error bits in CSR
+; 2) if error: return error registers
+; r5 must contain error location
+; response is written to "rspsta" only in case of error
+; result: 4 words: CSR1, CSR2, DRIVE STATUS. ERROR
+chkerr:
+1$:	tstb	rkcs1(r4)	; test for ready: bit  7
+	bpl	1$
+
+	mov	rkcs1(r4),r0	; return status CSR
+	bmi	2$		; error
+
+	; can drive accept commands ?
+	mov	rkds(r4),r0
+	; SVAL = 15 = Status Valid
+	; DRDY = 7 = Drive Ready
+	; VV = 6 = Volume Valid
+	; DRA = 0 = Drive Available
+	com	r0
+	bit	#100301,r0	; SVAL,DRDY,VV,DRA must be set	  #100301
+	bne	2$		; any set in complement-> not all set -> error
+
+	clc			; no error: clear error flag
+	return
+2$:
+	; error!
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	 ; result status = error location
+	mov	#4,(r3)+	 ; 4 error words
+	mov	rkcs1(r4),(r3)+  ; build error vector
+	mov	rkcs2(r4),(r3)+
+	mov	rkds(r4),(r3)+
+	mov	rker(r4),(r3)+
+	sec			; set error flag
+	return
+
+
+	;-----------------------------------------------------------------------
+	; go
+	; start function with correct drive type
+	; r0 is function code (changed)
+	; r4 is controller base addr (not changed)
+go:
+1$:	tstb	rkcs1(r4)	; test for ready: bit 7
+	bpl	1$
+	asl	r0		; function -> bits 4:1
+	inc	r0		; set GO bit
+	bit	#2,@#prflags	; DriveType 0 or 1?
+	beq	2$
+	bis	#2000,r0	; set "RK07" flag in Controller Drive Type bit #10
+2$:
+	; Controller Format bit 12 = 0 -> 22 sectors with 16 bit words
+	; Extended Bus Address (addr 17:16) always 0
+	mov	r0,rkcs1(r4)	; go
+
+3$:	tstb	rkcs1(r4)	; test for ready bit 7
+	bpl	3$
+
+	return
+
+
+	;-----------------------------------------------------------------------
+	; initrw
+	; setup busaddress address 'rxbfdt' = data part of transfer buffer
+	;  set disk with cylinder, head, sector from r1,r2,r3ddress
+	; setup wordcount
+	; r2 is word count (not changed)
+	; r3 is buffer start addr (not changed)
+	; r4 is controller base addr (not changed)
+	; r5 is error location (not changed)
+	; See Chapter 7.6 "Programming examples"
+	; in RK06-RK07 Disk Drive User's Manual (February 1978, EK-RK067-UG-001).pdf
+initrw:
+1$:	tstb	rkcs1(r4)	; test for ready: bit  7
+	bpl	1$
+	mov	#040,rkcs2(r4)	; subsystem clear
+	mov	@#prunit,r0
+	movb	r0,rkcs2(r4)	; set unit
+
+	; set disk address
+	clr	rkda(r4)
+	mov	@#prsect,r0
+	bis	r0,rkda(r4)	; set bit 4:0 with sector number
+	mov	@#prhead,r0	; r0 = head << 8
+	swab	r0
+	bis	r0,rkda(r4)	; set bit 15:8 = head number
+	mov	@#prcyl,r0
+	mov	r0,rkdc(r4)	; set cylinder number
+
+	; set bus address
+	mov	r3,rkba(r4)	; memory address of buffer
+	mov	r2,r0		; r2 = size of buffer in words
+	neg	r0
+	mov	r0,rkwc(r4)	; set word count negative : one sector has 256 words
+
+	clr	r0
+	call	@#go		; start "Drive Select"
+	mov	#2,r0
+	call	@#go		; start "Drive Clear"
+	mov	#1,r0
+	call	@#go		; start "Pack Acknowledge"
+
+	call	@#chkerr	; permanent errors, drive can accept commands ?
+
+	return
+
+
+	;-----------------------------------------------------------------------
+	; readsc
+	; read sector(s)
+	; r5 = error location
+	; no registers changed, if no error (carry clear)
+readsc: 	; read sector(s)
+
+	mov	#10,r0		; function code "read data"
+	call	@#go
+
+	call	@#chkerr	; carry = error
+	return
+
+
+	;-----------------------------------------------------------------------
+	; writsc
+	; write sector(s)
+	; r5 = error location
+	; no registers changed, if no error (carry clear)
+writsc: 	; write sector(s)
+	mov	#11,r0		; function code "write data"
+	call	@#go
+
+	call	@#chkerr	; carry = error
+	return
+
+
+
+	;-----------------------------------------------------------------------
+	; cheksc
+	; check sector(s)
+	; r5 = error location
+	; no registers changed, if no error (carry clear)
+cheksc: 	; write check sector(s)
+	mov	#14,r0		; function code "write check data"
+	call	@#go
+
+	call	@#chkerr	; carry = error
+	return
+
+
+	.include	     pdp11gui_aux.mac
+
+	.include	     pdp11gui_serialxfer.mac
+

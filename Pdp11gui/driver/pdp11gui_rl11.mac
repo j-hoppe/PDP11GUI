@@ -1,0 +1,395 @@
+	.title	PDP11GUI RL01/RL02 sector loader/writer for RL11/RLV11/RLV12 controller
+
+	; This code reads or writes one sector from a RL01/RL02 into memory
+	; It is used by PDP11GUI to access a RL01/RL02 disc
+	;
+	; See
+	;    EK-ORL11-TD-001 RL11 Controller Technical Description Manual 1980.pdf
+	;    EK-RL012-UG-005 RL01-RL02 User Guide Sep81.pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; call conventions, stack, entry points: see "pdp11gui_main.mac"
+
+	; framework
+	.include	pdp11gui_main.mac
+
+
+	; Flags in parameter "prflags":
+				; bit 0 = not used
+				; bit 1 = #2: 0 = RL01, 1 = RL02 (not used)
+	; prtrack is 0..255 (Rl01), 0..511(RL02)
+	; prhead is 0..1
+	; prsector is 0..39
+
+	; error fields in output block buffer for hardware errors
+	; location info must be written to result status "ressta"
+	; save len of error vector in "reswc"
+errcs	=	xmbuff+4	; +0=opcode, +2=len, +4 = param 0 of block 0: RXCS register
+
+	; controller register offsets against base address
+
+rlcs	=+0		; control/status
+rlba	=+2		; bus address
+rlda	=+4		; disk address
+rlmp	=+6		; multipurpose
+
+	; command opcodes
+cmstat	=2*2		    ; get status
+cmseek	=3*2		    ; seek
+cmrdhd	=4*2		    ; read header
+cmwrda	=5*2		    ; write data
+cmrdda	=6*2		    ; read data
+
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+; --------------- entry for "get drive information --------------------
+; reset drive
+
+doinit: 	; RL11 executes "Get Status" with Reset
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#rspdat,r3	; if no error: return no data
+	mov	#101,r5 	; error location #101
+	call	@#chkerr	; 1st call resets drive status
+	call	@#chkerr	; permanent errors ?
+	; carry is error flag
+
+	jmp	@#doresp
+
+
+; --------------- entry for read and / check--------------------
+
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#102,r5 	; error location
+	call	@#seek		; suche unit/cylinder/head
+	bcs	9$		; error exit
+
+	mov	#103,r5 	; error location
+	mov	#rspdat,r3	; r3 = start of result block
+	mov	@#prwlen,r2	; wordcount to read
+
+	call	@#initrw	; setup registers for read/write. input=r2,r3
+	bcs	9$		; error exit
+
+	mov	#104,r5 	; error location
+	call	@#readsc	; read one or many sectors
+	bcs	9$		; error exit
+	; now "prwlen" words have been read into "rspdat". advance r3
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+	mov	@#prwlen,r2	; wordcount to read
+	add	r2,r3
+	add	r2,r3		; r3 += byte count
+
+
+	; exit without error, but optionally suppress data
+	; suppress data output?
+	; -- writing output params destroys input params!
+	tst	@#flgchk
+	beq	1$
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+1$:
+	clc			; clear error flag
+9$:
+	jmp	@#doresp	; r3 = end of buffer
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	; r3 = pointer in result buffer = data area of request block 1
+
+	mov	#105,r5 	; error location
+	call	@#seek		; suche unit/cylinder/head
+	bcs	9$		; error exit
+
+	mov	#106,r5 	; error location
+	mov	@#req1dt,r3	; r3 = data of request data block 1
+	mov	@#req1wc,r2	; r2 = word count to write
+	mov	(r2),r2 	; r2 is addr of len
+	call	@#initrw	; setup registers for read/write. input=r2,r3
+	bcs	9$		; error exit
+
+	mov	#107,r5 	; error location
+	call	@#writsc	; write one or many sectors
+	bcs	9$		; error exit
+
+	; exit without error and without response data
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+
+; -------- check for error
+; 1) checks error bits in CSR
+; 2) if error: return drive status
+; execute "get status" with error reset
+; r5 must contain error location
+; result: 1st word = CSR, 2nd word = drive STATUS
+chkerr:
+	; verify controller ready
+0$:	tstb	(r4)	    ; test for "controller ready" (csr.7)
+	bpl	0$	    ; wait
+
+	mov	(r4),r0 	; return status CSR
+	bic	#1777,r0	; ignore bits 9:0, error flags are in 15:10
+	bne	1$
+	clc
+	return			; CSR = R1 = 0: no error
+
+1$:	; error!
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	; result status = error location
+	mov	#2,(r3)+	; 2 error words following
+	mov	(r4),(r3)+	; 1st word = CSR
+
+	; ---------- reset + get status ----------
+	mov	#013,rlda(r4) ; subcmd reset+getstatus
+	; csr input, unit number in upper byte
+	mov	@#prunit,r0
+	swab	r0	    ; unit number in upper byte
+	bis	#cmstat,r0  ; set bits for "get status" cmd (r0lo is 0, r0hi is still unit no)
+	mov	r0,(r4)     ; execute
+2$:	tstb	(r4)	    ; test for "controller ready" (csr.7)
+	bpl	2$	    ; wait
+
+	; ---------- error evaluation -----------
+	; status is in mp register
+	; abort, if not "LOCK ON", heads over disk, type=rl02, etc.
+;	mov	rlmp(r4),r1
+  ; halt
+;	bic	#020300,r1  ; mask out write protect, selected head, rl01/rl02 flag
+;	; both rl01 and rl02 are supported
+;	cmpb	#000035,r1  ; brush home, heads out, locked on track
+;	bne	3$		       ; NOT OK
+;	clc
+;	return			; no error
+;3$:
+	; error: return MPR
+	mov	rlmp(r4),(r3)+	; 2nd word = error code from MPR register
+	sec			; error flag
+	return
+; Bits in MPR:
+; WDE=15=100000;"Get Status Current Write Data Error: Write gate asserted but no write data transitions within required time"
+; CHE=14= 40000;"Get Status Current In Head Error: Write current in head when write gate not asserted"
+;  WL=13= 20000;"Get Status Write Lock: Drive is write protected"
+;SKTO=12= 10000;"Get Status Seek Time Out: Heads not on track during seek, ready lsot while drive in position (lock-on) mode"
+; SPE=11=  4000;"Get Status Spin Error: Spindle spins not up fast enough or speed to high"
+; WGE=10=  2000;"Get Status Write Gate Error: During write gate if: not ready, write protected, sector pulse, another error"
+;  VC= 9=  1000;"Get Status Volume Check: set during cartridge spin up. Indicator that cartridge may have been mounted"
+;  DSE=8=   400;"Get Status Drive Select Error: Set when a multiple drive selection is detected"
+;   DT=7=   200;"Get Status Drive Type: 0 = RL01, 1 = RL02"
+;   HS=6=   100;"Get Status Head Select: indicates the currently selected head"
+;   CO=5=    40;"Get Status Cover Open: set when the cartridge access cover is open or the dust cover is not in place"
+;   HO=4=    20;"Get Status Heads Out: set when the heads are over the disk"
+;   BH=3=    10;"Get Status Brush Home: set when the brushes are home"
+;   ST=2:0;"Get Status Drive State: 0=Load Cartridge, 1=Spin-up, 2=Brush Cycle, 3=Load Heads, 4=Seek, 5=Lock On, 6=Unload Heads, 7=Spin-down"
+
+
+	; --------------------------------------------------
+	; seek subroutine
+	;
+	; r4 = controller base
+	; r5 = error location
+
+	; --------------------------------------------------
+seek:
+	; all registers are changed
+	call	@#chkerr	; check drive status
+	bcs	9$		; error exit
+
+10$:
+	; ---------- get current head position
+	mov	@#prunit,r0
+	swab	r0	    ; unit number in upper byte
+	bis	#cmrdhd,r0  ; read header cmd
+	mov	r0,(r4)     ; execute
+2$:	tstb	(r4)	    ; test for "controller ready"
+	bpl	2$	    ; wait
+	mov	rlmp(r4),r0 ; retrieve cyl/head/sector
+ ; halt
+
+	; ---------- setup seek ----------
+	; setup DAR with delta cylinders, head select and direction
+	mov	#1,rlda(r4) ; init DA
+	mov	@#prhead,r1
+	asl	r1
+	asl	r1
+	asl	r1
+	asl	r1
+	bis	r1,rlda(r4) ; da.4 is "head select"
+	; calc difference of old and new cylinder
+	; extract current cylinder from mp<15:7> in r0
+	asr	r0
+	bic	#100000,r0  ; clr MSB
+	asr	r0
+	asr	r0
+	asr	r0
+	asr	r0
+	asr	r0
+	asr	r0
+	; r0 is current cylinder, r1 is new cylinder
+	mov	@#prcyl,r1
+	cmp	r1,r0	    ; is new > current?
+	bge	3$
+	; new cylinder in r1 is less than current cylinder in r0
+	; direction is outward (to lesser cylinders), do not set direction bit
+	sub	r1,r0	    ; r5 = absolute track difference
+	br	4$
+3$:	; new track in r1 is greater or equal current cylinder in r5
+	sub	r0,r1
+	mov	r1,r0	    ; r5 = absolute cylinder difference
+	; seek direction is inward (to higher cylinders), direction is 1
+	bis	#4,rlda(r4) ; set direction bit da.2
+
+
+4$:  ; r0 is absolute cylinder count, direction bit already set
+     ; cylinder in r1 is not longer needed
+ ; halt
+	clc
+	asl	r0
+	asl	r0
+	asl	r0
+	asl	r0
+	asl	r0
+	asl	r0
+	asl	r0		   ; r0 <<= 7 ;
+	bis	 r0,rlda(r4) ; cylinder difference in da <15:7>
+
+	; ---------- execute seek ----------
+	mov	@#prunit,r0
+	swab	r0	    ; unit number in upper byte
+	bis	#cmseek,r0	; read header cmd
+	mov	r0,(r4) 	; execute
+5$:	tstb	(r4)	; test for "controller ready"
+	bpl	5$	; wait
+
+	; ---------- wait for end of seek ----------
+	; warte auf "Drive ready" in csr
+6$:
+	call	@#chkerr
+	bcs	9$		; error exit
+
+	mov	(r4),r0
+	bic	#1777776,r0	; isolate bit 0 - driver ready
+	beq	6$		; loop, until bit 0 = 1
+
+	; ---------- end reached , everything ok -----------
+	clc				; no error
+
+9$:
+	return
+ ; halt
+
+
+	;-----------------------------------------------------------------------
+	; initrw
+	; fills DA with cylinder, head, sector
+	; sets BA with address R3
+	; read: r3 = response buffer
+	; write: r3 = request buffer 1
+	; r2 = words to transfer
+	; r4 is controller base addr
+initrw:
+	clr	rlda(r4)
+	mov	@#prsect,r0
+	bis	r0,rlda(r4)	; set bit 5:0 with sector number
+	mov	@#prhead,r0
+	swab	r0
+	asr	r0
+	asr	r0		; r0 = head << 6
+	bis	r0,rlda(r4)	; set bit 6 with head number
+	mov	@#prcyl,r0
+	clc
+	rol	r0
+	rol	r0
+	rol	r0
+	rol	r0
+	rol	r0
+	rol	r0
+	rol	r0		; r0 = cylinder << 7
+	bis	r0,rlda(r4)	; set bit 15:7 with cylinder number
+
+	mov	r3,rlba(r4)		; memory address of buffer
+	mov	r2,r0			      ; size of buffer
+	neg	r0
+	mov	r0,rlmp(r4)	; set word count negative : one sector has 128 words
+
+	; verify, that seek is on right cylinder?
+	clc			; no error
+	; all input registers are changed
+	return
+
+;-----------------------------------------------------------------------
+	; readsc
+	; read sector
+	; r4 is controller base addr
+	; r5 is error location
+readsc: 	; read sector
+
+; Test of bad block logic: cylinder 066 = 54 =0x36, head 1, alle sectoren sind schlecht!
+; blocknr = 4360-4379
+;	mov @#prcyl,r0
+;	cmp #66,r0
+;	bne	0$	       ; continue
+;	mov @#prhead,r0
+;	cmp #1,r0
+;	bne	0$		; continue
+;	mov	#666,r5 	; test error
+;	mov	#10,r4	; error location
+;	return
+;
+;0$:
+
+	mov	@#prunit,r0
+	swab	r0	; unit number in upper byte
+	bis	#cmrdda,r0	; read data cmd
+ ; halt
+	mov	r0,(r4) 	; execute
+1$:	tstb	(r4)	; test for ready
+	bpl	1$
+
+	call	@#chkerr	; carry = error
+	return
+
+
+
+	;-----------------------------------------------------------------------
+	; writsc
+	; write sector
+	; r4 is controller base addr
+	; R5 = error location
+writsc: 	; read sector
+	mov	@#prunit,r0
+	swab	r0	; unit number in upper byte
+	bis	#cmwrda,r0	; read data cmd
+	mov	r0,(r4) 	; execute
+1$:	tstb	(r4)	; test for ready
+	bpl	1$
+
+	call	@#chkerr	 ; carry = error
+	return
+
+
+	.include	     pdp11gui_aux.mac
+
+	.include	     pdp11gui_serialxfer.mac
+
+	.end

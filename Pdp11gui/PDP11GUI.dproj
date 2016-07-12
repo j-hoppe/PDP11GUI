@@ -1,0 +1,315 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{62f5683a-af59-45fa-a83f-2fe77642996b}</ProjectGuid>
+        <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+        <DCC_DCCCompiler>DCC32</DCC_DCCCompiler>
+        <DCC_DependencyCheckOutputName>pdp11GUI.exe</DCC_DependencyCheckOutputName>
+        <MainSource>pdp11GUI.dpr</MainSource>
+        <ProjectVersion>14.4</ProjectVersion>
+        <Config Condition="'$(Config)'==''">Debug</Config>
+        <FrameworkType>VCL</FrameworkType>
+        <Base>True</Base>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <TargetedPlatforms>1</TargetedPlatforms>
+        <AppType>Application</AppType>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
+        <Base_Win32>true</Base_Win32>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
+        <Base_Win64>true</Base_Win64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_1)'!=''">
+        <Cfg_1>true</Cfg_1>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win32)'!=''">
+        <Cfg_1_Win32>true</Cfg_1_Win32>
+        <CfgParent>Cfg_1</CfgParent>
+        <Cfg_1>true</Cfg_1>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_2)'!=''">
+        <Cfg_2>true</Cfg_2>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_2)'=='true') or '$(Cfg_2_Win32)'!=''">
+        <Cfg_2_Win32>true</Cfg_2_Win32>
+        <CfgParent>Cfg_2</CfgParent>
+        <Cfg_2>true</Cfg_2>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <Icon_MainIcon>PDP11GUI_Icon2.ico</Icon_MainIcon>
+        <Manifest_File>None</Manifest_File>
+        <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
+        <VerInfo_MinorVer>47</VerInfo_MinorVer>
+        <VerInfo_Release>10</VerInfo_Release>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Build>2100</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=Jörg Hoppe;FileDescription=A graphical interface for PDP-11 system consoles;FileVersion=1.47.10.2100;InternalName=;LegalCopyright=(C) 2008-2015 by Joerg Hoppe, Goettingen, Germany;LegalTrademarks=;OriginalFilename=;ProductName=PDP11GUI;ProductVersion=1.45;Comments=Updates under http://www.retrocmp.com/tools/pdp11gui</VerInfo_Keys>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;Xml;Data;Datasnap;Web;Soap;Winapi;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_RangeChecking>true</DCC_RangeChecking>
+        <DCC_IntegerOverflowCheck>true</DCC_IntegerOverflowCheck>
+        <DCC_UnitSearchPath>telnet\OverbyteIcsV7\Delphi\Vc32;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_DependencyCheckOutputName>pdp11GUI.exe</DCC_DependencyCheckOutputName>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win32)'!=''">
+        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <Icon_MainIcon>PDP11GUI_Icon2.ico</Icon_MainIcon>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <DCC_Namespace>System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win64)'!=''">
+        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <Icon_MainIcon>PDP11GUI_Icon2.ico</Icon_MainIcon>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1)'!=''">
+        <Version>7.0</Version>
+        <DCC_DebugInformation>False</DCC_DebugInformation>
+        <DCC_LocalDebugSymbols>False</DCC_LocalDebugSymbols>
+        <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
+        <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
+        <DCC_Optimize>False</DCC_Optimize>
+        <DCC_IntegerOverflowCheck>True</DCC_IntegerOverflowCheck>
+        <DCC_RangeChecking>True</DCC_RangeChecking>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
+        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <VerInfo_Build>2022</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.47.10.2022;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2)'!=''">
+        <Version>7.0</Version>
+        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+        <DCC_IntegerOverflowCheck>True</DCC_IntegerOverflowCheck>
+        <DCC_RangeChecking>True</DCC_RangeChecking>
+        <DCC_Optimize>False</DCC_Optimize>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
+        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <VerInfo_Build>2053</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.47.10.2053;InternalName=;LegalCopyright=Joerg Hoppe;LegalTrademarks=;OriginalFilename=;ProductName=PDP11GUI;ProductVersion=1.47.2;Comments=</VerInfo_Keys>
+    </PropertyGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Delphi.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Delphi.Personality>
+                <Parameters>
+                    <Parameters Name="UseLauncher">False</Parameters>
+                    <Parameters Name="LoadAllSymbols">True</Parameters>
+                    <Parameters Name="LoadUnspecifiedSymbols">False</Parameters>
+                </Parameters>
+                <VersionInfo>
+                    <VersionInfo Name="IncludeVerInfo">True</VersionInfo>
+                    <VersionInfo Name="AutoIncBuild">True</VersionInfo>
+                    <VersionInfo Name="MajorVer">1</VersionInfo>
+                    <VersionInfo Name="MinorVer">45</VersionInfo>
+                    <VersionInfo Name="Release">1</VersionInfo>
+                    <VersionInfo Name="Build">2143</VersionInfo>
+                    <VersionInfo Name="Debug">False</VersionInfo>
+                    <VersionInfo Name="PreRelease">False</VersionInfo>
+                    <VersionInfo Name="Special">False</VersionInfo>
+                    <VersionInfo Name="Private">False</VersionInfo>
+                    <VersionInfo Name="DLL">False</VersionInfo>
+                    <VersionInfo Name="Locale">1031</VersionInfo>
+                    <VersionInfo Name="CodePage">1252</VersionInfo>
+                </VersionInfo>
+                <VersionInfoKeys>
+                    <VersionInfoKeys Name="CompanyName">Jörg Hoppe</VersionInfoKeys>
+                    <VersionInfoKeys Name="FileDescription">A graphical interface for PDP-11 system consoles</VersionInfoKeys>
+                    <VersionInfoKeys Name="FileVersion">1.45.1.2143</VersionInfoKeys>
+                    <VersionInfoKeys Name="InternalName"/>
+                    <VersionInfoKeys Name="LegalCopyright">(C) 2008-2014 by Joerg Hoppe, Goettingen, Germany</VersionInfoKeys>
+                    <VersionInfoKeys Name="LegalTrademarks"/>
+                    <VersionInfoKeys Name="OriginalFilename"/>
+                    <VersionInfoKeys Name="ProductName">PDP11GUI</VersionInfoKeys>
+                    <VersionInfoKeys Name="ProductVersion">1.45</VersionInfoKeys>
+                    <VersionInfoKeys Name="Comments">Updates under http://www.retrocmp.com/tools/pdp11gui</VersionInfoKeys>
+                </VersionInfoKeys>
+                <Source>
+                    <Source Name="MainSource">pdp11GUI.dpr</Source>
+                </Source>
+                <Excluded_Packages>
+                    <Excluded_Packages Name="C:\Program Files (x86)\FastReports\LibD17\dclfs17.bpl">FastScript 1.9 Components</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Program Files (x86)\FastReports\LibD17\dclfrx17.bpl">FastReport 4.0 Components</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Program Files (x86)\FastReports\LibD17\dclfsDB17.bpl">FastScript 1.9 DB Components</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Program Files (x86)\FastReports\LibD17\dclfrxDB17.bpl">FastReport 4.0 DB Components</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Program Files (x86)\FastReports\LibD17\dclfrxe17.bpl">FastReport 4.0 Exports</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dcloffice2k170.bpl">Microsoft Office 2000 Beispiele für gekapselte Komponenten für Automatisierungsserver</Excluded_Packages>
+                    <Excluded_Packages Name="$(BDSBIN)\dclofficexp170.bpl">Microsoft Office XP Beispiele für gekapselte Komponenten für Automation Server</Excluded_Packages>
+                </Excluded_Packages>
+            </Delphi.Personality>
+            <Platforms>
+                <Platform value="Win32">True</Platform>
+                <Platform value="Win64">False</Platform>
+            </Platforms>
+        </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
+    </ProjectExtensions>
+    <ItemGroup>
+        <DelphiCompile Include="$(MainSource)">
+            <MainSource>MainSource</MainSource>
+        </DelphiCompile>
+        <DCCReference Include="FormMainU.pas">
+            <Form>FormMain</Form>
+        </DCCReference>
+        <DCCReference Include="FormSettingsU.pas">
+            <Form>FormSettings</Form>
+        </DCCReference>
+        <DCCReference Include="ConsolePDP1144U.pas"/>
+        <DCCReference Include="FormTerminalU.pas">
+            <Form>FormTerminal</Form>
+        </DCCReference>
+        <DCCReference Include="FormMacro11SourceU.pas">
+            <Form>FormMacro11Source</Form>
+        </DCCReference>
+        <DCCReference Include="FormMacro11ListingU.pas">
+            <Form>FormMacro11Listing</Form>
+        </DCCReference>
+        <DCCReference Include="FormLogU.pas">
+            <Form>FormLog</Form>
+        </DCCReference>
+        <DCCReference Include="MemoryCellU.pas"/>
+        <DCCReference Include="FormMemoryListU.pas">
+            <Form>FormMemoryList</Form>
+        </DCCReference>
+        <DCCReference Include="RegistryU.pas"/>
+        <DCCReference Include="AuxU.pas"/>
+        <DCCReference Include="SerialIoHubU.pas"/>
+        <DCCReference Include="FormMemoryTableU.pas">
+            <Form>FormMemoryTable</Form>
+        </DCCReference>
+        <DCCReference Include="FormBitfieldsU.pas">
+            <Form>FormBitfields</Form>
+        </DCCReference>
+        <DCCReference Include="BitFieldU.pas"/>
+        <DCCReference Include="ConsoleGenericU.pas"/>
+        <DCCReference Include="ConsolePDP11SimHU.pas"/>
+        <DCCReference Include="FormExecuteU.pas">
+            <Form>FormExecute</Form>
+        </DCCReference>
+        <DCCReference Include="Pdp11MmuU.pas"/>
+        <DCCReference Include="OctalConst.pas"/>
+        <DCCReference Include="FormMmuU.pas">
+            <Form>FormMMU</Form>
+        </DCCReference>
+        <DCCReference Include="Pdp1144MicroCodeU.pas"/>
+        <DCCReference Include="FormMicroCodeU.pas">
+            <Form>FormMicroCode</Form>
+        </DCCReference>
+        <DCCReference Include="FormDisasU.pas">
+            <Form>FormDisas</Form>
+        </DCCReference>
+        <DCCReference Include="FormAboutU.pas">
+            <Form>FormAbout</Form>
+        </DCCReference>
+        <DCCReference Include="ConsolePDP1144FakeU.pas"/>
+        <DCCReference Include="FrameMemoryCellGroupGridU.pas">
+            <Form>FrameMemoryCellGroupGrid</Form>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="FormMacro11CodeU.pas">
+            <Form>FormMacro11Code</Form>
+        </DCCReference>
+        <DCCReference Include="FormMemoryLoaderU.pas">
+            <Form>FormMemoryLoader</Form>
+        </DCCReference>
+        <DCCReference Include="MemoryLoaderU.pas"/>
+        <DCCReference Include="FakePDP1144U.pas"/>
+        <DCCReference Include="FakePDP11ODTU.pas"/>
+        <DCCReference Include="FakePDP11GenericU.pas"/>
+        <DCCReference Include="ConsolePDP11ODTU.pas"/>
+        <DCCReference Include="ConsolePDP11ODTFakeU.pas"/>
+        <DCCReference Include="AddressU.pas"/>
+        <DCCReference Include="FrameMemoryCellGroupListU.pas">
+            <Form>FrameMemoryCellGroupList</Form>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="FormIoPageScannerU.pas">
+            <Form>FormIopageScanner</Form>
+        </DCCReference>
+        <DCCReference Include="FormPdp1170PanelU.pas">
+            <Form>Formpdp1170Panel</Form>
+        </DCCReference>
+        <DCCReference Include="..\PDP1170Panel\delphi\pdp1170panelImplementorFrameU.pas">
+            <Form>pdp1170panelImplementorFrame</Form>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="..\PDP1170Panel\delphi\iowkit.pas"/>
+        <DCCReference Include="..\PDP1170Panel\delphi\pdp1170panelImplementorPhysicalU.pas"/>
+        <DCCReference Include="..\PDP1170Panel\delphi\pdp1170panelU.pas"/>
+        <DCCReference Include="CommU.pas"/>
+        <DCCReference Include="FormNoConsolePromptU.pas">
+            <Form>FormNoConsolePrompt</Form>
+        </DCCReference>
+        <DCCReference Include="SerialXferU.pas"/>
+        <DCCReference Include="FormMemoryDumperU.pas">
+            <Form>FormMemoryDumper</Form>
+        </DCCReference>
+        <DCCReference Include="FormDiscImageU.pas">
+            <Form>FormDiscImage</Form>
+        </DCCReference>
+        <DCCReference Include="FormChildU.pas"/>
+        <DCCReference Include="DiscImageBadBlockU.pas"/>
+        <DCCReference Include="FakePDP11M9312U.pas"/>
+        <DCCReference Include="ConsolePDP11M9312FakeU.pas"/>
+        <DCCReference Include="ConsolePDP11M9312U.pas"/>
+        <DCCReference Include="FormExecuteBlinkenlightU.pas">
+            <Form>FormExecuteBlinkenlight</Form>
+        </DCCReference>
+        <DCCReference Include="BlinkenlightInstructionsU.pas"/>
+        <DCCReference Include="FormMemoryTestU.pas">
+            <Form>FormMemoryTest</Form>
+        </DCCReference>
+        <DCCReference Include="FormDiscImageExitQueryU.pas">
+            <Form>FormDiscImageExitQueryForm</Form>
+        </DCCReference>
+        <DCCReference Include="MediaImageDevicesU.pas"/>
+        <DCCReference Include="MediaImageBufferU.pas"/>
+        <DCCReference Include="FormNumberconverterU.pas">
+            <Form>FormNumberConverter</Form>
+        </DCCReference>
+        <DCCReference Include="FakePDP11M9301U.pas"/>
+        <DCCReference Include="ConsolePDP11M9301U.pas"/>
+        <DCCReference Include="ConsolePDP11M9301FakeU.pas"/>
+        <DCCReference Include="ConsolePDP1144v340cFakeU.pas"/>
+        <DCCReference Include="FakePDP1144v340cU.pas"/>
+        <DCCReference Include="FormBusyU.pas">
+            <Form>BusyForm</Form>
+            <FormType>dfm</FormType>
+        </DCCReference>
+        <DCCReference Include="ConsolePDP1144v340cU.pas"/>
+        <DCCReference Include="ConsolePDP11ODTK1630U.pas"/>
+        <DCCReference Include="ConsolePDP11ODTK1630FakeU.pas"/>
+        <DCCReference Include="FakePDP11ODTK1630U.pas"/>
+        <None Include="history.txt"/>
+        <None Include="todo.txt"/>
+        <BuildConfiguration Include="Debug">
+            <Key>Cfg_2</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Base">
+            <Key>Base</Key>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Release">
+            <Key>Cfg_1</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+    </ItemGroup>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
+</Project>

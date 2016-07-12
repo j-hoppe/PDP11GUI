@@ -1,0 +1,105 @@
+    .title  serialio_dl11
+
+    ; Low level serial I/O for DEC DL11 at standard address.
+    ; To be included by "pdp11gui_serialxfer.mac"
+    ; Implements the functions:
+    ;   xmtbit
+    ;   xmtchr
+    ;   rcvbit
+    ;   rcvchr
+    ;
+
+	kbs = 177560
+
+    ; --------------------------------------------------
+    ; xmtbit: transmit 6 bits in r5
+    ; xmtchr: transmit character in r5
+xmtbit:
+;	 ; send	CR every 64 characters
+;	 mov	 r1,-(sp)	 ; save	r1
+;	 bic	 #177677,r1	  ; bit	#100 set?
+;	 bne	 0$
+;	 mov	 r5,-(sp)
+;	 mov	 #15,r5
+;	 call	 @#xmtchr
+;	 mov	 (sp)+,r5
+;0$:
+;	 mov	 (sp)+,r1	; restore r1
+
+	bic	#300,r5	   ; r5	 &= 0x3f
+	add	#40,r5	   ; offset 0x20 = octal 40
+xmtchr:
+	mov	r0,-(sp)
+	mov	#kbs,r0	   ; r0	points to serial port #0
+
+1$:
+	tstb	4(r0)	   ; ready to transmit?
+	bpl	1$	   ; no, loop
+	movb	r5,6(r0)   ; transmit data
+	; wait until it	is out (so char	is out even if next char is HALT)
+2$:
+	tstb	4(r0)	   ; ready to transmit?
+	bpl	2$	   ; no, loop
+
+	mov	(sp)+,r0
+	return
+
+; --------------------------------------------------
+;	rcvbit:	6 bit code empfangen
+;		carry set: END OF BLOCK	empfangen '}', test with "bcs"
+;		overflow set: REPEAT empfangen '|' , test with "bvs"
+;               delay char '~' is implicitely ignored
+;	rcvchr:	character empfangen
+;	modifies only R5!
+rcvbit:
+1$:
+	call	@#rcvchr
+	clv			   ; clear overflow
+	cmpb	#'},r5		  ; '}'	= 175
+	beq	2$
+	cmpb	#'|,r5		  ; '|'	= 174
+	beq	3$
+	cmpb	r5,#40		   ; char below	0x20?
+	blo	1$		   ; yes: receive next char
+	cmpb	r5,#140		   ; other chars above 0x60 (delay)?
+        bhis    1$                 ; ignore
+; mov r5,(r2)+ ; to diag buffer
+	sub	#40,r5	   ; subtract offset
+	bic	#300,r5	   ; r5	 &= 0x3f
+	clc			; clr carry = valid char
+	return
+2$:
+	sec			; set carry = end of block
+	return
+3$:				; set Overflow
+	sev
+	return
+
+;	modifies only R5!
+;	halts with error if overrun
+rcvchr:
+	mov	r0,-(sp)
+	mov	#kbs, r0   ; r0	points to serial port #0
+; TEST:	r2 zeigt auf  byte aus testdata
+;	clr	r5	   ; TEST
+;	movb	(r2),r5	   ; TEST
+;	inc	r2	   ; TEST
+;	br	2$	   ; TEST
+	tst	2(r0)			  ; test bit  15 = error
+	bpl	1$		    ; no error
+	mov	#15,r5		     ; error location
+	mov	2(r0),r5	  ; receiver = error
+	; An error in the serial interface means: loss of contact.
+	; So return of error result is impossible.
+	; Use the only remaining option is:
+	halt
+1$:
+	tstb	(r0)	   ; character received?
+	bpl	1$	   ; no, loop
+	movb	2(r0),r5   ; read rcv buffer
+2$:
+
+    bic     #177600,r5      ; mask to 7 bits
+	mov	(sp)+,r0
+	return
+

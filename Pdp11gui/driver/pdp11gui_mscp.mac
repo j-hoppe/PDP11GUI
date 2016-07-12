@@ -1,0 +1,581 @@
+	.title	PDP11GUI MSCP block loader/writer
+
+	; This code reads or writes one sector from a MSCP drive into memory
+	; It is used by PDP11GUI
+	;
+	; See
+	;    AA-L621A-TK Storage System Unibus Port Description - 1982.pdf
+	;    AA-L619A-TK MSCP Basic Disk Functions Manual Version 1.2 - April 1982.pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; framework
+	.include	pdp11gui_main.mac
+
+
+;mscsr	=172150 			; std MSCP csrbase
+msip	=+0				; IP register
+mssa	=+2				; SA register
+
+
+
+	; ------------------------------------------------------
+	; --- mscp memory structures
+
+mscpms = . ; MSCP Message Memory Start
+
+	; communication area "Unibus Port Desription" [4-2]
+cacint: .blkw	1   ; Communication Area Command INTerrupt indicator (not used)
+carint: .blkw	1   ; Communication Area Response INTerrupt indicator (not used)
+carbas:     ; -- Comunication Area Ring BASe
+   ; only 1 response descriptor and one 1 command descriptor
+   ; response descriptor 0:
+cardsc: 	 ; -- Communication Area Response message DeSCriptor
+   .blkw	1		; rmsg	  ; address of response message envelope
+   .blkw	1		; 15 = owner, 14=flag, 1:0 = addr 17:16
+cacdsc: 	; -- Communication Area Command message DeSCriptor
+   .blkw	1		; cmsg	  ; address of command message envelope
+   .blkw	1		; see above
+
+
+;---------------------------------------------------------------------------
+; MSCP Communications area offsets
+;---------------------------------------------------------------------------
+
+cmdint	=	-4	    ; Command interrupt indicator
+rspint	=	-2	    ; Response interrupt indicator
+rspbuf	=	0	    ; Response buffer address
+rspflg	=	2	    ; Response flags
+cmdbuf	=	4	    ; Command buffer address
+cmdflg	=	6	    ; Command flags
+
+owner	=	100000	    ; Buffer ownership flag (1 = Controller)
+
+   ; Command Message, used for read and Write, ONLINE and GET UNIT STATUS
+   ; buffer addr für read und write ist immer der serialxfer-buffer
+
+
+	; message envelope: base-4 ..base-1 base. See "Unibus port description," [4-6]
+	.blkw 1  ; msg len (bytes)
+	.blkw 1  ; 15:8 = connection id, 7:4 = msgtyp, 3:0 = credits
+cmdmsg: 	; Command MeSsage
+	.blkw 40		; enough space for READ, WRITE, ONLINE and GET UNIT STATUS
+cmdsiz = .-cmdmsg		; Command MeSsaGe SIZe
+
+   ; End Message
+	.blkw 1  ; msg len (bytes)
+	.blkw 1  ; 15:8 = connection id, 7:4 = msgtyp, 3:0 = credits
+endmsg: 	; END MeSsage
+   .blkw 40	; enough space for READ, WRITE, ONLINE and GET UNIT STATUS
+endsiz	= .-endmsg	; END MeSsaGe SIZe
+
+mscpme	= . ; MSCP Memory End
+
+	; Generic Command Message Offsets
+P.CRF	=	0	; command reference number (2 word: lo,hi)
+P.UNIT	=	4		; Unit number
+P.OPCD	=	10		; Opcode (1 byte)
+P.MOD	=	12		; Modifiers
+P.BCNT	=	14		; Byte count (2 word: lo,hi)
+P.BUFF	=	20		; Buffer descriptor (6 word)
+P.LBN	=	34		; Logical Block Number (2 word: lo,hi)
+	; ABORT and GET COMMAND STATUS Command Message Offsets
+P.OTRF	=	14		; Outstanding reference number (2 words)
+	; ONLINE and SET UNIT CHARACTERISTICS Command Message Offsets
+P.UNFL	=	16		; Unit Flags
+P.DVPM	=	34		; device dependent parameters (2 words)
+	; REPLACE Command Message Offsets
+P.RBN	=	14		; Replacement block number (2 words)
+	; SET CONTROLLER CHARACTERISTICS Command Message Offsets
+P.VRSB	=	14		; MSCP version
+P.CNTF	=	16		; Controller flags
+P.HTMO	=	20		; Host timeout
+P.TIME	=	24		; Quad word time and date
+
+	; Generic End and Attention Message Offset
+P.CRF	=	0		; Command reference number (2 words)
+P.UNIT	=	4		; Unit number
+P.OPCD	=	10		; Opcode, also called endcode (1 byte)
+P.FLGS	=	11		; End message flags (1 byte)
+P.STS	=	12		; Status
+P.BCNT	=	14		; Byte count (2 words: lo, hi)
+P.FBBK	=	34		; First Bad Block (2 words)
+	; ABORT and GET COMMAND STATUS End Message Offsets
+P.OTRF	=	14		; Outstanding reference number ( 2 words)
+P.CMST	=	20		; Command status
+	; GET UNIT STATUS End Message Offsets
+P.MLUN	=	14		; Multi-Unit code
+P.UNFL	=	16		; Unit flags
+P.UNTI	=	24		; Unit identifier (4 words)
+P.MEDI	=	34		; Media type identifier (2 words)
+P.SHUN	=	40		; Shadow unit
+P.TRCK	=	44		; Track size
+P.GRP	=	46		; Group size
+P.CYL	=	50		; Cylinder Size
+P.RCTS	=	54		; RCT table size
+P.RBNS	=	56		; RBNs/track (1 byte)
+P.RCTC	=	57		; RCT copies (1 byte)
+	; ONLINE and SET UNIT CHARACTERISTICS End Message Offsets
+P.MLUN	=	14		; Multi-Unit code
+P.UNFL	=	16		; Unit flags
+P.UNTI	=	24		; Unit identifier (4 words)
+P.MEDI	=	34		; Media type identifier (2 words)
+P.UNSZ	=	44		; Unit size (2 words)
+P.VSER	=	50		; Volume serial number (2 words)
+	; SET CONTROLELR CHARACTERISTICS End Message Offsets
+P.VRSN	=	14		; MSCP version
+P.CNTF	=	16		; Controller flags
+P.CTMO	=	20		; controller timeout
+P.CNTI	=	24		; Controlelr ID (4 words)
+
+
+; Command Opcodes
+OP.ABO	=	01		; ABORT
+OP.ACC	=	20		; ACCESS
+OP.AVL	=	10		; AVAILABLE
+OP.CMP	=	40		; COMAPRE HOST DATA
+OP.DAP	=	13		; DETERMINE ACCESS PATHS
+OP.ERS	=	22		; ERASE
+OP.GCS	=	02		; GET COMMAND STATUS
+OP.GUS	=	03		; GET UNIT STATUS
+OP.ONL	=	11		; ONLINE
+OP.RD	=	41		; READ
+OP.RPL	=	24		; REPLACE
+OP.SCC	=	04		; SET CONTROLLER CHARACTERISTICS
+OP.SUC	=	12		; SET UNIT CHARACTERISTICS
+OP.WR	=	42		; WRITE
+
+OP.END	=	200		; END MESSAGE flag
+
+; COMMAND MODIFIERS
+MD.CMP	=	40000		; Compare
+MD.EXP	=	100000		; Express REquest
+MD.ERR	=	10000		; Force Error
+MD.SEC	=	1000		; Supress Error Correction
+MD.SER	=	400		; Supress Error Recovery
+
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+
+
+; --------------- entry for "set online and get drive info" ------------
+;	result buffer ([word index dec]
+;	[0] unit identifer 1st lo    (from ONLINE)
+;	[1] unit identifer 1st hi    (from ONLINE)
+;	[2] unit identifer 2nd lo    (from ONLINE)
+;	[3] unit identifer 2nd hi    (from ONLINE)
+;	[4] media type identifier lo (from ONLINE)
+;	[5] media type identifier hi (from ONLINE)
+;	[6] reserved		     (from ONLINE)
+;	[7] reserved		     (from ONLINE)
+;	[8] blockcount lo	    (from ONLINE)
+;	[9] blockcount hi	    (from ONLINE)
+;	[10] volume serial num lo     (from ONLINE)
+;	[11] volume serial num hi     (from ONLINE)
+;	[12] track size 	      (from GET UNIT STATUS)
+;	[13] group size 	      (from GET UNIT STATUS)
+;	[14] cylinder size	      (from GET UNIT STATUS)
+;	[15] reserved		 (from GET UNIT STATUS)
+;	[16] RCT size		      (from GET UNIT STATUS)
+;	[17] RBNS/copies	     (from GET UNIT STATUS)
+doinit:
+	mov	@#prcba,r4	; r4 = always controller base address
+	mov	#rspdat,r3	; r3: pointer to response buffer
+
+	call	@#init
+	bcs	9$		; error exit
+
+;	call	@#ctlchr ; SET CONTROLLER CHARACTERISTICS: clear host timeout!
+
+	call	@#online
+	bcs	9$		; error exit
+
+	; copy data from ONLINE end message to xmt buffer (r3)
+
+	mov	#endmsg+P.UNTI,r0	     ; src, from unit identifier field
+	mov	#14,r2	     ; word count
+	mov	r3,r1
+	call	@#memcpy	; copy r2 words from r0 to r1
+	mov	r1,r3
+; br 2$ ; skip GET UNIT STATUS
+	call	@#unitst	     ; GET UNIT STATUS
+	bcs	9$	; error exit
+	; copy data from GET UNIT STATUS end message to buffer
+	mov	#endmsg+P.TRCK,r0	     ; src, from track size field
+	mov	#6,r2				     ; 6 words
+	mov	r3,r1
+	call	@#memcpy
+	mov	r1,r3
+
+	clc			; OK: clear error flag
+9$:				; error exit, carry set, response is error msg
+	jmp	@#doresp
+
+
+; --------------- entry for read --------------------
+
+doread:
+; for debugging: set registers
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+
+	mov	@#prcba,r4	; r4 = always controller base address
+; test: online direkt davor!
+;  call @#init
+;  call @#online
+
+	mov	#OP.RD,r1	; opcode READ
+	mov	#rspdat,r3	; r3 = start of result block
+	mov	@#prwlen,r2	; wordcount to read
+
+	call	@#rwbl	; do MSCP "read blocks" operation
+	bcs	9$		; error exit
+
+	; now "prwlen" words have been read into "rspdat". advance r3
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+	mov	@#prwlen,r2	; wordcount to read
+	add	r2,r3
+	add	r2,r3		; r3 += byte count
+
+	; exit without error, but optionally suppress data
+	; suppress data output?
+	; -- writing output params destroys input params!
+	tst	@#flgchk
+	beq	1$
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+1$:
+	clc			; clear error flag
+9$:
+	jmp	@#doresp	; r3 = end of buffer
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#OP.WR+MD.CMP,r1	; opcode WRITE with COMPARE flag
+	mov	@#req1dt,r3	; r3 = data of request data block 1
+	mov	@#req1wc,r2	; r2 = word count to write
+	mov	(r2),r2 	; r2 is addr of len
+	call	@#rwbl		; do MSCP "read blocks" operation
+	bcs	9$		; error exit
+
+	; exit without error and without response data
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+	; ----- set error response with 1 error word
+	; error location in r5
+	; error register value in r0
+	; r3 on exit is end of response buffer... right for "jmp @#doresp"
+errrsp: ; ERRor ReSPonse
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	 ; result status = error location
+	mov	#1,(r3)+	 ; 1 error word
+	mov	r0,(r3)+	 ;
+	sec			 ; set eror flag
+	return
+
+
+	; --------------- CLEAR
+mscpcl: ; MSCP CLear all buffer structures
+	mov	#mscpms,r0
+1$:	clr	(r0)+
+	cmp	r0,#mscpme
+	bne	1$
+	return
+
+	; --------------- initialization
+	; "Unibus Port Description", [9-1]
+	;
+	; controller initialization sets all units offline
+	; changes r0,r1,r2
+
+init:
+	call   @#mscpcl 	       ; first: clear out MSCP memory buffers structure
+
+	mov	r0,msip(r4)	; init controller: write any value to IP.
+	mov	#4000,r2	; mask for S1,S2,S3,S4
+	mov	#initdt,r1     ; r1 points to data
+
+	; send init data. R5 is 4000,10000,20000,40000 for S1,S2,S3,S4
+1$:
+	mov	mssa(r4),r0	; error bit set in SA register ?
+	bpl	2$
+	mov	#101,r5 ; error location
+	call	@#errrsp	; generate error response
+	return
+2$:
+	bit	mssa(r4),r2 ; step bit set ?
+	beq	1$	; not yet, wait loop
+	mov	(r1)+,mssa(r4)	; yes, send next init data
+	asl	r2		; next mask
+	bpl	1$		; s4 done? br if not yet
+	clc			; no error on exit
+	return
+
+
+initdt: 	; INIT DaTa for steps S1..S4
+	.word	100000		; S1: 100000 = no int, ring size 1, no vector
+	.word	carbas		; S2: ringbase lo addr
+	.word	000000		; S3: 000000 = no purge/poll, ringbase hi addr
+	.word	000001		; S4: 000001 = go bit
+
+
+; --------------- entry for online --------------------
+; set drive online, get total blockcount
+;	changes r0,r1,r2
+;	error locations: 1100+x
+online:
+	call @#mscpcl		; clear buffer area
+	; build command msg.
+	mov	#cmdmsg-4,r1   ; start at message envelope
+
+	mov	#cmdsiz,r0	; size must be >= #44
+	mov	r0,(r1)+	; set message length in envelope
+	clr	(r1)+		; connection,msgtyp,credits=0
+	; r1 points to command msg
+	mov	r1,@#cacdsc	; link online message to command message descriptor in ring
+
+	mov	@#prunit,r2
+	mov	r2,P.UNIT(r1)	; set unit number
+	mov	#OP.ONL,r0 ; opcode = 011 (ONLINE), no modifiers "Basic Disc Functions" [A-1]
+	mov	r0,P.OPCD(r1)
+
+	; set owner flag in message ring command descriptor
+	mov	#owner,r0	  ; command message is owned by port now
+	mov	r0,@#cacdsc+2
+
+	; end message is cleared by "mscpcl", link to response ring
+	mov	#endmsg,r1	; start at message envelope
+	mov	r1,@#cardsc	; link online message to response message descriptor in ring
+	; set owner flag in message ring response descriptor
+	mov	#owner,r0	  ; command message is owned by port now
+	mov	r0,@#cardsc+2
+
+	; EXECUTE!
+	mov	msip(r4),r0	; wake controller (read IP)
+
+	; loop until response message descriptor owner flag == 0 (owner==host)
+1$:	tst	@#cardsc+2		; response owner ==  controller ?
+	bmi	1$		; loop if not done
+	; results: read status:
+	; "normal" (#0) oder "already online" (#400)sind gut, alle anderen sind schlecht
+	;	see "Basic Disk Functions" [B-2]
+	; sonstige codes
+	; 1 = invalid message len
+	;	or other
+	; 03  = Unit unknown or online to another controller
+	; 043 = no volume mounted
+	; 103	unit is inoperative
+	; 203  duplicate unit number
+	; 403 unit disabled by field service or diagnostic
+	; 20006 unit is hardware write protected
+	; 10006 unit is software write protected
+	; 012	command timeout/ retry exceeded?
+	; "Media format error":
+	; 045  FCT unreadable - EDC error
+	; 105  FCT unreadable - Invalid sector handler
+	; 145  FCT unreadable - Data sync timeout
+	; 245  FCT unreadable - Disc isn't formatted with 512bvytes / sector
+	; 305  FCT unreadable - Disc isn't formatted  or FCT corrupted
+	; 345  FCT unreadable - FCT unreadable - uncorrectable ECC error
+	; "Data error"
+	; 110 Header compare error (valid header not found)
+	; 150 Data sync not found
+	; 350 Uncorrectable ECC error
+	; 410 One symbol ECC error
+	; 450 Two symbol ECC error
+	; 510 Three symbol ECC error
+	; 550 Four symbol ECC error
+	; 610 Five symbol ECC error
+	; 650 Six symbol ECC error
+	; 710 Seven symbol ECC error
+	; 750 Eight symbol ECC error
+	; "host buffer access":
+	; 51	Odd transfer address
+	; 111	Odd byte count
+	; 151	non-existen memory error
+	; 211	host memroy parity error
+	; "Controller error"
+	; 52	SERDES overrun error
+	; 112	EDC error
+	; 152	Inconsitent internal data structure
+	; "Drive error":
+	; 53	SDI command timed out
+	; 113	Controller detcted transmission or prtocol error
+	; 153 Positioner error (mis-seek)
+	; 213	Lost read/write ready during or between transfers
+	; 253	Drive clock dropout
+	; 313	Lost receiver ready between sectors
+	; 353	Drive detected error
+	; 413	Controller detected pulse or state pariy error
+
+	mov	P.STS(r1),r0
+	cmp	r0,#0
+	beq	2$
+	cmp	r0,#400
+	beq	2$
+	; error
+	mov	#102,r5 	; error location
+	call	@#errrsp	; generate error response
+	return
+
+2$:	; result is returned in 'emsonl' structure
+	clc			; OK
+	return
+
+
+; --------------- entry for get unit status --------------------
+; set drive online, get total blockcount
+; changes r0, r1, r2
+; error location: 1200
+unitst: ; UNIT STatus
+	call	@#mscpcl ; clear buffer area
+	; build command msg
+	mov	#cmdmsg-4,r1   ; start at message envelope
+
+	mov	#cmdsiz,r0	; size must be > #44
+	mov	r0,(r1)+	; set message length in envelope
+	clr	(r1)+	; connection,msgtyp,credits=0
+
+	; r1 is command message
+	mov	r1,@#cacdsc	; link online message to command message descriptor in ring
+
+	mov	@#prunit,r2
+	mov	r2,P.UNIT(r1)	; set unit number
+	mov	#OP.GUS,r0 ; opcode = 03 (GET UNIT STATUS), no modifiers "Basic Disc Functions" [A-1]
+	mov	r0,P.OPCD(r1)
+
+	; set owner flag in message ring command descriptor
+	mov	#owner,r0	  ; command message is owned by port now
+	mov	r0,@#cacdsc+2
+
+	; end message is cleared by "mscpcl", link to response ring
+	mov	#endmsg,r1	; start at message envelope
+	mov	r1,@#cardsc	; link online message to response message descriptor in ring
+ ; set owner flag in message ring response descriptor
+	mov	#owner,r0	;command message is owned by port now
+	mov	r0,@#cardsc+2
+
+	; EXECUTE!
+	mov	msip(r4),r0	; wake controller (read IP)
+
+	; loop until response message descriptor owner flag == 0 (owner==host)
+1$:	tst	@#cardsc+2		; response owner ==  controller ?
+	bmi	1$		; loop if not done
+
+	; read status
+	mov	P.STS(r1),r0
+	cmp	r0,#0
+	beq	2$
+	cmp	r0,#400
+	beq	2$
+	; error!
+	mov	#103,r5 	; error location
+	call	@#errrsp	; generate error response
+	return
+
+2$:	; result is returned in 'emsust' structure
+	clc			; OK
+	return
+
+
+; --------------- entry for "read blocks" --------------------
+; read or write block from start block number
+; VB: var prstbl = start block number
+; var rwlen	 = block length in words
+; Register R1 = OPCODE (041 für READ, 042 für WRITE)
+; r2 = word count to read/write
+; r3 = xmit buffer: write: req1dt, read: rspdat
+; no modifiers	"Basic Disc Functions" [A-1]
+
+rwbl:
+	mov	r1,-(sp)	; save opcode
+	call @#mscpcl ; clear buffer area. r2,R3 is preserved.
+	; build command msg, use  "msgrw: MeSsaGe read/Write". "Basic Disc Functions" [5-5],[6-33]
+; mov	 #cmdmsg,r0
+; mov	r1,P.OPCD(r0)
+
+	mov	#cmdmsg-4,r1   ; start at message envelope
+; mov #4000,r0 ; TEST: nicht 32 k!
+	mov	#xmbufe-xmbuff,r0 ; size is size of whole serial receive buffer
+	mov	r0,(r1)+	; set message length in envelope
+	clr	(r1)+		; connection,msgtyp,credits=0
+	; r1 is command message
+	mov	r1,@#cacdsc	; link online message to command message descriptor in ring
+	mov	@#prunit,r0
+	mov	r0,P.UNIT(r1)	; set unit number
+	mov	(sp)+,r0	; restore opcode
+	mov	r0,P.OPCD(r1)	; set opcode
+	mov	@#prwlen,r0
+	asl	r0	; word count -> byte count (max 32k bytes!)
+	mov	r0,P.BCNT(r1)	; set bytecount lo
+	mov	r3,P.BUFF(r1) ; set physical addr low in buffer descriptor field
+	mov	@#prstb0,r0
+	mov	r0,P.LBN(r1)	; set start block number lo word
+	mov	@#prstb1,r0
+	mov	r0,P.LBN+2(r1)	; set start block number hi word
+
+	; set owner flag in message ring command descriptor
+	mov	#owner,r0	  ; command message is owned by port now
+	mov	r0,@#cacdsc+2
+
+	; end message is cleared by "mscpcl", link to response ring
+	mov	#endmsg,r0	; start at message envelope
+	mov	r0,@#cardsc	; link online message to response message descriptor in ring
+	; set owner flag in message ring response descriptor
+	mov	#owner,r0	  ; command message is owned by port now
+	mov	r0,@#cardsc+2
+
+	; EXECUTE!
+;	mov	@#mscsr,r0		; wake controller (read IP)
+	mov	msip(r4),r0	; wake controller (read IP)
+
+	; loop until response message descriptor owner flag == 0 (owner==host)
+1$:
+;	mov	@#mscsr+mssa,r1 		 ; error, if SA.15 set
+	mov	mssa(r4),r0		 ; error, if SA.15 set
+	bpl	2$
+	; Error!
+	mov	#104,r5 	; error location
+	call	@#errrsp	; generate error response
+	return
+2$:
+	tst	@#cardsc+2		; response owner ==  controller ?
+	bmi	1$		; loop if not done
+	; +12 = status
+	clr	r5		; default: error free
+	mov	P.STS(r1),r0		   ; read status
+	cmp	r0,#0
+	beq	3$
+	cmp	r0,#400
+	beq	3$
+	; Error!
+	mov	#105,r5 	; error location
+	call	@#errrsp	; generate error response
+	return
+3$:	; OK
+	clc			; clear error flag
+	return
+
+
+
+	.include       pdp11gui_aux.mac
+
+	.include       pdp11gui_serialxfer.mac
+
+	.end

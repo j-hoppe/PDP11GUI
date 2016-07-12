@@ -1,0 +1,260 @@
+	.title	PDP11GUI PC05 loader/writer for PC11 controller
+
+	; This code reads or writes bytes from a PC11/PC05 into memory
+	; It is used by PDP11GUI to access a PC05 High speed papertape reader/punch
+	;
+	; See
+	;	PC11 high-speed reader-punch and control manual (Sep 1974, EK-PC11-TM-003).pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; call conventions, stack, entry points: see "pdp11gui_main.mac"
+	;
+	; Special functions here:
+	; * block size is 1 word
+	; * only the lower half of each word contains valid data (a byte)
+	; * parameter block as for disk drives, but
+	;   prunit, prcyl,prsect, ptrhead are ignored
+	; * check mode is implement: read without data return
+	; * on "read", a "end of paper" is not an error.
+	;   In fact, read can cause no errors at all!
+
+	; framework
+	.include	pdp11gui_main.mac
+
+	; Flags in parameter "prflags": not used
+
+	; controller register offsets against base address
+
+prs	=+0		; Paper-Tape Reader Status Register (777550)
+prb	=+2		; Paper-Tape Reader Buffer Register (777552)
+pps	=+4		; Paper-Tape Punch  Status Register (777554)
+ppb	=+6		; Paper-Tape Punch  Buffer Register (777556)
+
+
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+; --------------- entry for "get drive information --------------------
+; reset drive and reset controller
+
+doinit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	; in the PC11, there is not much to reset
+	clr	prs(r4) 	; clear reader, punch status: disable interrupt
+	clr	pps(r4) 	;
+
+	mov	#rspdat,r3	; if no error: return no data
+	mov	#101,r5 	; error location #101
+	call	@#chkerr	; wait and check
+	call	@#chkerr	; permanent errors ?
+
+	; carry is error flag
+	jmp	@#doresp
+
+
+; --------------- entry for read and / check--------------------
+
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#102,r5 	; error location
+
+	mov	#rspdat,r3	; r3 = start of result block
+	mov	@#prwlen,r2	; word count to read
+
+	call	@#read		; read r2 words/bytes
+	; now maximal "prwlen" bytes have been read into "rspdat".
+	; fewer bytes may have been read if "end of tape" occured
+	; r3 points to end of buffer
+	; bcs	9$		; error exit? NO: error = end of tape
+
+	; exit without error, but optionally suppress data
+	; -- writing output params destroys input params!
+	tst	@#flgchk
+	beq	1$
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+1$:
+	clc			; clear error flag
+9$:
+	jmp	@#doresp	; r3 = end of buffer
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	; r3 = pointer in result buffer = data area of request block 1
+
+	mov	#105,r5 	; error location
+	mov	@#req1dt,r3	; r3 = data of request data block 1
+	mov	@#req1wc,r2	; r2 = word count to write
+	mov	(r2),r2 	; r2 is addr of len
+
+	call	@#punch 	; punch r2 words/bytes
+
+	bcs	9$		; error exit
+
+	; exit without error and without response data
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+;-----------------------------------------------------------------------
+	; chkeot - check for reader error == reader "end of tape"
+; 1) checks error bits in reader status
+; 2) if error: return carry set.
+;	do NOT manipulate r3, data remains valid
+chkeot:
+	; wait for reader/punch to be READY
+1$:	; test bit 11 = BUSY
+	bit	#4000,prs(r4)	; test reader BUSY
+	bne	1$		; loop until reset
+
+	mov	prs(r4),r0
+	bmi	9$		; bit 15 = Any reader error
+	clc
+	return			; CSR = R1 = 0: no error
+9$:
+	sec			; EOF
+	return
+
+;-----------------------------------------------------------------------
+	; chkpnc - check punch for error
+; 1) checks error bits in punch status
+chkpnc:
+
+1$:	tstb	pps(r4) ; wait for punch READY
+	bpl	1$	 ; DONE = prs:7
+
+	mov	pps(r4),r0
+	bmi	9$		; bit 15 = Any punch error
+
+	clc
+	return			; CSR = R1 = 0: no error
+
+9$:	; error!
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	; result status = error location
+	mov	#2,(r3)+	; 2 error words following
+
+	mov	prs(r4),(r3)+	; 1st word = prs
+	mov	pps(r4),(r3)+	; 2nd word= pps
+	sec			; error flag
+	return
+
+
+;-----------------------------------------------------------------------
+	; chkerr - check for error
+; 1) checks error bits in reader status and punch status
+; 2) if error: return 2 registers
+; r5 must contain error location
+; result: 1st word = prs (reader status), 2nd word=pps (punch status)
+chkerr:
+
+	; wait for reader/punch to be READY
+1$:	; test bit 11 = BUSY
+	bit	#4000,prs(r4)	; test reader BUSY
+	bne	1$		; loop until reset
+
+2$:	tstb	pps(r4) ; wait for punch READY
+	bpl	2$	 ; DONE = prs:7
+
+	mov	prs(r4),r0
+	bmi	9$		; bit 15 = Any reader error
+
+	mov	pps(r4),r0
+	bmi	9$		; bit 15 = Any punch error
+
+	clc
+	return			; CSR = R1 = 0: no error
+
+9$:	; error!
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	; result status = error location
+	mov	#2,(r3)+	; 2 error words following
+
+	mov	prs(r4),(r3)+	; 1st word = prs
+	mov	pps(r4),(r3)+	; 2nd word= pps
+	sec			; error flag
+	return
+
+
+
+
+;-----------------------------------------------------------------------
+	; read - read bytes from paper tape
+	; a byte is handled as word with msb = 0
+	; r2 is byte/word count
+	; r3 is buffer address
+	; r4 is controller base addr
+	; r5 is error location
+	;
+	; any error terminates read, but without error.
+	; an error is always interpreted as "end of tape"
+	; on exit, r3 points to next unwritten byte in buffer
+read:	; read bytes
+	inc	r2		; r2 may be 0, must exit without error
+
+1$:
+	dec	r2		; <r2> words  read?
+	beq	8$		; yes: ready
+	; read a single byte
+
+	mov	#1,prs(r4)	; start read
+	call	@#chkeot	; wait and check for error = end of tape
+	bcs	9$		; error exit: singal "end of tape" with carry
+	mov	prb(r4),(r3)+	; save word
+	br	1$		; read next
+
+8$:
+	clc		; clear carry = error flag
+9$:
+	return
+
+;-----------------------------------------------------------------------
+	; punch - punch bytes onto paper tape
+	; a byte is handled as word with msb = 0
+	; r2 is byte/word count
+	; r3 is buffer address
+	; r4 is controller base addr
+	; r5 is error location
+punch:
+	inc	r2		; r2 may be 0, must exit without error
+
+1$:
+	dec	r2		; <r2> words  punched?
+	beq	8$		; yes: ready
+	; punch a single byte
+
+2$:	tstb	pps(r4) 	; wait for punchr READY
+	bpl	2$		; DONE = prs:7
+	mov	(r3)+,ppb(r4)	; move words to punch
+	call	@#chkpnc	; wait and check
+	bcs	9$		; error exit
+	br	1$		; punch next
+
+8$:
+	clc		; clear carry = error flag
+9$:
+	return
+
+	.include		 pdp11gui_aux.mac
+
+	.include		 pdp11gui_serialxfer.mac
+
+	.end

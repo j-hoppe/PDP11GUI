@@ -1,0 +1,104 @@
+    .title  serialio_k8060
+
+    ; Low level serial I/O for  Robotron AIS K8060 console I/O
+    ; at standard address
+    ; To be included by "pdp11gui_serialxfer.mac"
+    ; Implements the functions
+    ;   xmtbit
+    ;   xmtchr
+    ;   rcvbit
+    ;   rcvchr
+    ;
+
+	; It is assumed that the serial interface is already
+	; initialized by boot code, so
+	; - registers are enabled in I/O space.
+	; - mode is asyncronous
+	; - baudrate is valid
+	; - format is 8N1 or so
+aisadr  = 177500	; base addr of AIS channel 1A
+aisdpr	=	0		; channel 1A read/write data port offset
+aissr	=	2		; channel 1A control/address port offset (write)
+aislr	=	2		; channel 1A status port offset (read)
+
+
+    ; --------------------------------------------------
+    ; xmtbit: transmit 6 bits in r5
+    ; xmtchr: transmit character in r5
+xmtbit:
+
+	bic	#300,r5	   ; r5	 &= 0x3f
+	add	#40,r5	   ; offset 0x20 = octal 40
+xmtchr:
+	mov	r0,-(sp)
+	mov	#aisadr,r0	   ; r0	points to serial port #0
+
+	; assume no pending address select in SR0, so LR0 is accessed
+1$:	bit	#4,aislr(r0)	; LR0.D2: xmt buffer emtpy?
+	beq	1$		; no, loop
+	movb	r5,aisdpr(r0)   ; write char into "1A Schreibdatenregister"
+
+	; wait until it	is out (so char	is out even if next char is HALT)
+2$:	bit	#4,aislr(r0)	; LR0.D2: xmt buffer emtpy?
+	beq	2$		; no, loop
+
+	mov	(sp)+,r0
+	return
+
+; --------------------------------------------------
+;	rcvbit:	6 bit code empfangen
+;		carry set: END OF BLOCK	empfangen '}', test with "bcs"
+;		overflow set: REPEAT empfangen '|' , test with "bvs"
+;               delay char '~' is implicitely ignored
+;	rcvchr:	character empfangen
+;	modifies only R5!
+rcvbit:
+1$:
+	call	@#rcvchr
+	clv			   ; clear overflow
+	cmpb	#'},r5		  ; '}'	= 175
+	beq	2$
+	cmpb	#'|,r5		  ; '|'	= 174
+	beq	3$
+	cmpb	r5,#40		   ; char below	0x20?
+	blo	1$		   ; yes: receive next char
+	cmpb	r5,#140		   ; other chars above 0x60 (delay)?
+        bhis    1$                 ; ignore
+; mov r5,(r2)+ ; to diag buffer
+	sub	#40,r5	   ; subtract offset
+	bic	#300,r5	   ; r5	 &= 0x3f
+	clc			; clr carry = valid char
+	return
+2$:
+	sec			; set carry = end of block
+	return
+3$:				; set Overflow
+	sev
+	return
+
+;	modifies only R5!
+;	halts with error if overrun
+rcvchr:
+	mov	r0,-(sp)
+	mov	#aisadr, r0   ; r0	points to serial port #0
+	; assume no pending address select in SR0, so LR0 is accessed
+
+    ; Error detection on K8060 ?
+	; tst	2(r0)			  ; test bit  15 = error
+	; bpl	1$		    ; no error
+	; mov	#15,r5		     ; error location
+	; mov	2(r0),r5	  ; receiver = error
+	; An error in the serial interface means: loss of contact.
+	; So return of error result is impossible.
+	; Use the only remaining option:
+	; halt
+1$:
+    bit	#1,aislr(r0)	; LR0.D0: char received?
+	beq	1$		; no, loop
+
+	mov	   aisdpr(r0),r5	; read char from "1A Lesedatenregister"
+    bic     #177600,r5      ; mask to 7 bits
+
+	mov	(sp)+,r0
+	return
+

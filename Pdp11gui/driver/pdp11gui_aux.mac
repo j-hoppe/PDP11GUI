@@ -1,0 +1,65 @@
+    .title  aux
+
+    ; utilities
+
+        ; memclr
+        ; clears r0..r5
+regclr:
+        clr     r0
+        clr     r1
+        clr     r2
+        clr     r3
+        clr     r4
+        clr     r5
+        return
+
+        ; memclr
+        ; clears R2 words from R0
+        ; Return: R2 is 0, R0 is incremeneted
+memclr:
+1$:
+        tst     r2          ; while(n) {
+        beq     2$
+        clr    (r0)+        ;  *dst++ = 0
+        dec     r2          ;   n--
+        br      1$          ; }
+2$:
+        return
+
+        ; memset
+        ; sets R2 words from R0 to value in R1
+        ; Return: R2 is 0, R0 is incremented
+        ; Speed is essential for RLE decoding, so high speed 8 word copy is used
+        ; Speed calculation: n*3 cycles
+memset:
+        tst     r2
+        beq     9$          ; already 0
+1$:
+        mov     r1,(r0)+    ;   *dst++ = val    // 16
+        sob     r2,1$
+9$:
+        return
+
+
+        ; memcpy
+        ; copy R2 words from R0 to R1
+        ; Return: R0, R1 are incremented, R2 is 0
+memcpy:
+1$:
+        tst     r2          ; while(n) {
+        beq     2$
+        mov     (r0)+,(r1)+ ;  *dst++ = *src++
+        dec     r2          ;   n--
+        br      1$          ; }
+2$:
+        return
+
+;	warte 64k cpu cycles
+wait64k:
+	mov	r0,-(sp)
+	mov	#100000,r0	r0	; loop hat 2 cycles: load with 32k
+1$:	dec	r0
+	bne	1$
+	mov	(sp)+,r0
+	return
+

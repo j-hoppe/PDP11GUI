@@ -1,0 +1,256 @@
+	.title	PDP11GUI RM02/RM03 sector loader/writer for RH11 controller
+
+	; This code reads or writes one sector from a RM*-drive into memory
+	; It is used by PDP11GUI to access a RM*- discs
+	; Should also work for RP devices.
+	;
+	; RM drives can seek within transfers, so word transmit size is not critical.
+	;
+	; See
+	;    RM02-03 Adapter Technical Description Manual (May 1978, EK-RM023-TD-001).pdf
+	;
+	; !!! DO NOT CHANGE file name,
+	; !!! entry labels,
+	; !!! sector buffer address, or
+	; !!! register meaning
+	;
+	; call conventions, stack, entry points: see "pdp11gui_main.mac"
+
+	; framework
+	.include	pdp11gui_main.mac
+
+	; Flags in parameter "prflags":
+	;		not used
+
+	; prtrack is 0..822
+	; prhead is 0..4
+	; pr sect = 0..31
+
+	; error fields in output block buffer for hardware errors
+	; location info must be written to result status "ressta"
+	; use r3 aus data pointer
+
+;rmcsr	=176700 	    ; std RH11 csrbase
+rmcs1	=+0			    ; control/status register ONE
+rmcs2	=+10			    ; control/status register TWO
+rmwc	=+2			    ; word count (load negative)
+rmba	=+4			    ; bus address
+rmda	=+6		; disk address: desired track+sector
+rmer1	=+14			; error register 1
+rmdc	=+34			; disk address: desired cylinder
+rmof	=+32		; offset
+rmer2	=+42			; error register 2
+
+	; global variables for this driver
+flgchk: .blkw	1	; 1 = do not transmit read data back (= do "check operation")
+
+
+; --------------- entry for "get drive information --------------------
+; reset drive
+
+doinit: 	; RL11 executes "Get Status" with Reset
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#rspdat,r3	; if no error: return no data
+	mov	#101,r5 	; error location #101
+	; exit without error, and without response data
+	call	@#chkerr	; permanent errors ?
+	; carry is error flag
+
+	jmp	@#doresp
+
+
+; --------------- entry for read --------------------
+
+doread:
+	clr	@#flgchk	;
+	br	dordch
+dochek:
+	mov	#1,@#flgchk	; set flag to inhibit data transmission
+dordch:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#102,r5 	; error location
+	mov	#rspdat,r3	; r3 = start of result block
+	mov	@#prwlen,r2	; wordcount to read
+	call	@#initrw	; setup registers for read/write
+	bcs	9$		; error exit
+
+	mov	#103,r5 	; error location
+	call	@#readsc	; read one or many sectors
+	bcs	9$		; error exit
+
+	mov	#rspdat,r3	; reset r3 to begin of data of block 0 = "empty"
+	; suppress data output?
+	tst	@#flgchk
+	bne	1$
+	; flag is 0: do not suppress data transmission
+	; r2 words were read
+	mov	@#prwlen,r2	; wordcount to read
+	add	r2,r3
+	add	r2,r3		; r3 += byte count
+
+1$:
+	clc			; clear error flag
+
+9$:
+	jmp	@#doresp
+
+
+; --------------- entry for write --------------------
+
+dowrit:
+	mov	@#prcba,r4	; r4 = always controller base address
+
+	mov	#104,r5 	; error location
+	mov	@#req1dt,r3	; r3 = data of request data block 1
+	mov	@#req1wc,r2	; r2 = word count to write
+	mov	(r2),r2 	; r2 is addr of len
+
+	call	@#initrw	; setup registers for read/write. r2..5 not changed
+	bcs	9$		; error exit
+
+	mov	#105,r5 	; error location
+	call	@#writsc	 ; write one or many sectors. r2..5 not changed
+	bcs	9$		; error exit
+
+	; verify
+	mov	#106,r5 	; error location
+				; r3 = start of result block, r2 = len still valid
+	call	@#initrw	 ; setup registers for read/write. r2..5 not changed
+	bcs	9$		; error exit
+
+	mov	#107,r5 	; error location
+	call	@#cheksc	; check one or many sectors
+	bcs	9$		; error exit
+
+	; exit without error, and without response data
+	mov	#rspdat,r3	; r3 = start of result block 0 = no data
+	clc			; clear error flag
+9$:
+	jmp	@#doresp
+
+
+
+; -------- check for error
+; 1) checks error bits in CSR
+; 2) if error: return error registers
+; r5 must contain error location
+; response is written to "rspsta" only in case of error
+; result: 4 words: CSR1, CSR2, ERRO1, ERROR2
+chkerr:
+1$:	tstb	rmcs1(r4)	; test for ready: bit  7
+	bpl	1$
+
+	mov	rmcs1(r4),r0	; return status CSR
+	bmi	2$
+	clc			; clear error flag
+	return
+2$:
+	; error!
+	mov	#rspsta,r3	; r3 = pointer to response block 0
+	mov	r5,(r3)+	 ; result status = error location
+	mov	#4,(r3)+	 ; 4 error words
+	mov	rmcs1(r4),(r3)+  ; build error vector
+	mov	rmcs2(r4),(r3)+
+	mov	rmer1(r4),(r3)+
+	mov	rmer2(r4),(r3)+
+	sec			; set error flag
+	return
+
+
+	;-----------------------------------------------------------------------
+	; initrw
+	; 1. execute Read-In Preset
+	; setup busaddress address 'rxbfdt' = data part of transfer buffer
+	;  set disk with cylinder, head, sector from r1,r2,r3ddress
+	; setup wordcount
+	; r2 is word count (not changed)
+	; r3 is buffer start addr (not changed)
+	; r4 is controller base addr (not changed)
+	; r5 is error location (not changed)
+initrw:
+	mov	@#prunit,r0
+	movb	r0,rmcs2(r4)	   ; set unit
+	; drive clear
+	mov	#011,rmcs1(r4)	     ; Drive clear
+1$:	tstb	rmcs1(r4)	; test for ready: bit  7
+	bpl	1$
+
+
+	; RIP
+	mov	#021,rmcs1(r4)	     ; RIP+GO. clear also bus address extension and IE, and other
+2$:	tstb	rmcs1(r4)	; test for ready: bit  7
+	bpl	2$
+	mov	#10000,rmof(r4)      ; format = 16bit, enable ecc, header compare, no offsets
+
+	clr	rmda(r4)
+	mov	@#prsect,r0
+	bis	r0,rmda(r4)	; set bit 4:0 with sector number
+	mov	@#prhead,r0			; r0 = head << 8
+	swab	r0
+	bis	r0,rmda(r4)	; set bit 15:8 = head number
+	mov	@#prcyl,r0
+	bis	r0,rmdc(r4)	; set bit 15:7 with cylinder number
+
+	mov	r3,rmba(r4)		; memory address of buffer
+	mov	r2,r0			      ; r2 = size of buffer in words
+	neg	r0
+	mov	r0,rmwc(r4)	; set word count negative : one sector has 256 words
+
+	; verify, that seek is on right cylinder?
+	clc				; no error
+	return
+
+
+	;-----------------------------------------------------------------------
+	; readsc
+	; read sector(s)
+	; r5 = error location
+	; no registers changed, if no error (carry clear)
+readsc: 	; read sector(s)
+
+       mov	#071,rmcs1(r4)	; read data
+ ; halt
+1$:	tstb	rmcs1(r4)	; test for ready: bit  7
+	bpl	1$
+
+	call	@#chkerr      ; carry = error
+	return
+
+
+	;-----------------------------------------------------------------------
+	; writsc
+	; write sector(s)
+	; r5 = error location
+	; no registers changed, if no error (carry clear)
+writsc: 	; write sector(s)
+       mov	#061,rmcs1(r4)	; write data
+ ; halt
+1$:	tstb	rmcs1(r4)	; test for ready: bit  7
+	bpl	1$
+
+	call	@#chkerr      ; carry = error
+	return
+
+
+
+	;-----------------------------------------------------------------------
+	; cheksc
+	; check sector(s)
+	; r5 = error location
+	; no registers changed, if no error (carry clear)
+cheksc: 	; write check sector(s)
+       mov	#051,rmcs1(r4)	; write check data
+ ; halt
+1$:	tstb	rmcs1(r4)	; test for ready: bit  7
+	bpl	1$
+
+	call	@#chkerr      ; carry = error
+	return
+
+
+	.include	     pdp11gui_aux.mac
+
+	.include	     pdp11gui_serialxfer.mac
+

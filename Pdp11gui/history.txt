@@ -1,0 +1,352 @@
+
+PDP11GUI Revision history:
+--------------------------
+
+29.6.2016   V 1.47.10
+                - added disk geometries for Robotron K5501/2
+                - bugfix:  block count in "TFormDiscImage.ReadMultiBlock()".
+                - disk driver PDP-11 code: interface code to serial port moved to
+                  separate module "pdp11gui_serialio_dl11.mac".
+                  This module can be exchanged if running on different serial hardware
+                  (Robotron AIS K8060).
+20.06.2016  V 1.47.9
+                - new disk driver RK611 for RK06/RK07
+20.06.2016  V 1.47.8
+                - fake for Robotron K1630
+                - bugfix for Robotron K1630
+                - after loading of new machine descrifile, show "Restart?" message.
+16.06.2016  V 1.47.7
+                - added 2K chip size in memory tester.
+16.06.2016  V 1.47.6
+                - Robotron A6402 CPU K1630 needs 'A' suffix for physical addresses.
+30.5.2016   V 1.47.5
+                - Bugfix:  If windows font magnification > 100 %, memory table form disturbed.
+                        Solution: set border "Sizeable", do not reduce width set by user.
+                - All stringgrids: DefaultRowHeight, ColWidths[] by Canvas.TextExtent
+                - Bugfix: 11/44 console with List-Exam.
+                - "Fake" PDP-11/44 mit console monitor v3.40C
+                - Long running console access now with progress bar and "abort" button
+12.5.2016   V 1.47.4
+                - ODT console: tolerates now optional "space" char after "@" prompt
+                  (PDP-11 clone from Rüdiger Kurt, ruediger.kurth@freenet.de)
+23.4.2016   V 1.47.3
+                interally serial Format (8N1, 7E1 etc) selectable. (Rüdiger Kurth)
+23.11.2015  V 1.47.2
+               - Compiling the disk driver always resulted in a "source save to file"
+                 This caused an error on Win10 platforms, since driver soures are located
+                 in c:\ProgramData\PDP11GUI
+               - FormMacro11Source: "Changed" property calculated by compare to disk content.
+10.5.2014   V 1.47
+               - Error report: When compiling the driver for the "disc image tool"
+                 Administrator privileges are needed. Reason:
+                 MACRO11 source(listing files are saved in ...\program data\.. folder,
+                 which is protected.
+                 Workaround: better diagnostic, run PDP11GUI as administrator.
+               - Bugfix: After running a MACRO11 program which outputs
+                 "ABCD...Z", on HALT contact to console is lost.
+                 Bug: data remains in the "RcvScanner" buffer, is cleared now in
+                 console.Resync()
+27.4.2015   V.1.46
+                Bugfix: M9301-YA produces NUL in output -> parsing errors.
+                On M9301/M9312 and others a filling <NUL> was interpreted
+                as backspace.
+5.11.2014   V 1.45.1
+                Bugfix: absolute papertape loader could not read 1 byte records
+7.10.2014   V 1.45.0
+            - Memory dumper can produce standard absolute paper tape records
+            - SIMH can be accessed over serial console
+              (request on VCFB2014, if running on BlinkenBone)
+12.8.2014   V 1.44.0
+            - Macro11Listing window did not display Tabs
+            - compiled macro11 with WinXP backward compatibility
+               (Visual Studio 2012 "Project Properties/C++/General/Platform Toolset")
+            -  renamed disk/tape driver files to controller names:
+               "pdp11gui_rl02.mac" -> "pdp11gui_rl11.mac"
+            -  added RX11 floppy disk controller
+10.8.2014   V 1.43.0
+            - added M9301 console: like M9312, but prompt is '$' instead of '@'
+27.7.2014   V 1.42.1
+            - Memory Loader window, Absolute Papertape Format:
+              logic allows odd addresses now for start of byte stream.
+30.4.2014   V 1.42.0
+             - In disassembler pdp11disas.dll, codes for "mfpi" and "mfpd" were exchanged.
+             - in macro11, error in checking for "JMP Rn" fixed.
+26.3.2014   V 1.41.0
+               Memory Test Windows now tests for stuck data lines.
+25.12.2013  V 1.40.0
+            Disc image logic:
+            - driver now running in command loop, not HALTing after every command.
+             (allows operation under M9312 console emulator)
+	     - Renamed Console driver "PDP1134" to "PDP11M9312"
+
+20.10.13    V 1.39.2
+            - macro11 now can produce listings with binary data in
+                hex notation (instead of octal). This was needed
+                while working with a logic analyzer who could only display hex data.
+            - now Baudrates 57600 and 115200 are possible
+                 (user request)
+18.10.13    V 1.39.1
+            - In ODT Console CR/LF was not displayed correctly
+5.10.2013:  V 1.39.0
+            - before macro11 is run, working dir is checked to be writeable
+30.09.2013  V 1.38.0
+             - new: Memory Test Window
+             - new: Memory Loader can verify
+             - now COM1-COM32 selectable, needed for USB-to-Serial adapters
+             - terminal background color settable
+             - added some retro fonts
+             - added some papertape images
+             - bug fix in ConsolePDP1134U.pas
+18.09.2013  V 1.37.0
+             - Terminal component from OverbyteIcsEmulVT.TEmulVT
+                changed back to plain RichEdit.
+                (too much trouble with scrolling and control,
+                and no VT100 benefit)
+15.09.2013  V 1.36.0
+            - new memory loader format: "Absolut Paper Tape"
+              Code from Mattis Lind, www.datormuseum.se. mattis@mattisborgen.se
+30.8.2012   V 1.35.0
+            - SimH 3.9 with stdio-telnet now sends correctly CR LF as "Newline"
+              indicator. ConsolePDP11SimHU changed accordingly
+
+8.12.2011   V 1.34.0
+                - Migration to Delphi 2009 / Unicode
+                - replaced buggy "Indy" telnet component with "OverbyteIcs"
+
+30.10.2011: V 1.33.0
+            - New form: Execute over Blinkenlight console"
+                gives instruction, how to run a program over console.
+            - Memory dumper can now produce switch-toggle instructions for
+              blinken light consoles.
+            - text files produced by memory dump can be openend in notepad.exe
+
+24.6.2011:
+            V 1.32.0
+                 completely redesigned disk read/write driver for RL02,RX02,RM02,MSCP implemented.
+                 Was a separate branch since Dec 2010.
+
+17.6.2011   V 1.31.4
+                Disassemble() bug fixes:
+                Calling convention for DLL-function "Dis11()" must be
+                "cdecl", not "stdcall".
+                Why did this ever work???
+14.6.2011   V 1.31.3
+            Bug, if "Release" version compiled with "Optimization:
+                Memory-bound violation in "Disassemble(),
+                some variables change inpredictable!
+                Do not use optimization anymore, until fixed.
+
+30.5.2011   V 1.31.2
+            - recompiled MACRO11.exe with static libraries ... got error msg
+            "The application has failed to start because its side-by-side configuration is incorrect"
+            on some Win7 systems.
+
+4.5.2011   V 1.31.1
+           - minor internal changes:
+             URLs changed to "www.retrocmp.com/tools/pdp11gui"
+           - microcode filename default ist "EY-C3012-RB-001 PDP-1144 Processor Maintenance Supplementary Listings (microcode) Apr-81.txt"
+16.12.2010 V 1.31.0
+           - Now 4 memory windows instead of 2.
+           - Byte size of Memory window can selected
+           - Disk image supports RX02.
+           - timeout for disk access is 500ms * block count
+            (RX02 is 166ms /rotation, with retry
+           - unfixed bug: close of macro11 source editor windows marks the
+                editor content as "changed". This prevents loading of new
+                disk driver.
+5.11.2010: V 1.30.0
+           - DiscImage: amount of blocks to transfer in one transmission
+              can be reduced (necessary for MSCP controllers and
+              slow baudrates ... controller timeout? report by Thomas Hoeffgen)
+             - DiscImage: ControllerBaseAddress can be modified
+16.8.2010: V 1.29.1
+           - Bugfix: on Closing a ChildForm "OnFormShow" was triggered
+             (because form style changed between "MDIChild" and "Normal").
+             This caused the Disassembly Window to "Examine" all its
+             memory cells again.
+30.7.2010: V 1.29.0
+           - Disassembly window with "from - to" address range
+           - memory window "set" does not Examine All
+           - machine description files gets processed by macro preprocessor M4
+             So modules are only defined once as a "templates"
+             and can then be used in multiple machine description files by
+             macro resolution.
+             New directory "machines", new executables "m4.exe" and "regexp2.dll",
+             new batch file "m4.bat".
+           - Since IO page scanner and DiskImage tool can not run on 11/34,
+             a warning is issued.
+17.7.2010: V 1.28.0
+           - PDP-11/34 console driver
+10.7.2010: V 1.27.0
+           - Fake for PDP-11/34 console emulator ready
+25.5.2010: V 1.26.0
+           - Bugfix: 11/23 CPU (M8186) has slightly different ODT behaviour.
+             ConsolePDP11ODTU modified.
+           - Internal logging system extended.
+18.7.2009: V 1.25.2
+          - pdp11disas.dll now compiled with "static mfc", so no
+            more dependency to MSVCR80.DLL
+23.6.2009: V 1.25.1
+         - bad blocks are recorded now with first und last time of occurence.
+         - Default directory for data and driver *.mac files now
+           in "Common App Data Folder" ("c:\ProgramData" under Vista)
+
+1.6.2009:  V 1.25.0
+         - DiscImage: enhanced bad block list.
+           All .bad-Files must be renamed to .meta and converted to this new format:
+           badblock=2052; cylinder.head.sector=12.4.4; source=Scan; "info=OK reading sector after 2 retries: error location = 2, error = 144270 000100 100000 000000!"
+           See chapter 3.2 ff in "DEC Std 144".
+          - Bug fix in Console driver for 11/44 and SimH:
+            Block-Examine could not switch to single-Examine when
+            sacnning illegal addresses/UNIBUS timeouts in I/O page.
+          - MemoryDumper/text format: nicer output with multiple values per line.
+          - Bug fix: pdp11disas.dll was delivered in debug version. This required the
+            debug version of msvcrt80.dll on the target system.
+
+23.5.2009: V 1.24.4
+         - fixed "Halt" command for SimH
+         - Dissassembly Window now with optional code cache.
+           Cache was default on previous versions, this was
+           dangerous since PDP-11 may use self-modifying code.
+3.5.2009   V 1.24.3
+         - Stops on SimH breakpoints are recognized now.
+         - Optimizations when loading large macro11 projects.
+         - Disk read/write: RLE compression also if readin from disk
+         - Upgraded to Jedi JVCL 3.36 .
+           Source code editor now repaints on resize,
+           JVEditor.LineInformations bottleneck fixed.
+15.4.2009  V 1.24.2
+         - Bugfix: Examine on SimH crashed for big memory ranges
+            (Memory Dumper Window)
+           - Bugfix in MemoryLoader, MemoryDumper: fileI/O
+         - Optimization: if SimH runs on localhost (127.0.01), Block Deposit data
+           are transferred to SimH with a temporary "DO" script,
+           not with multiple "deposit" commands.
+           But block "Examine" can not be done this way.
+         - macro11.exe is bugfixed: no endless loop if illegal
+           opcodes/illegal labels occur in source.
+ 9.3.2009  V 1.24.1
+         - Bugfix: a real 11/44 needs 300ms after "CONTINUE" before it can
+           receive data over serial port ... console processor?
+         - Disk Read/Write: bug fixes
+         - Disk Read/Write: ability to perform fast bad sector scan
+           (is a normal read without data transmission)
+
+ 7.2.2009  V 1.24
+         - MemoryDump Tool Window writes memory content to disc.
+         - fixed strange error: Examine of big memory ranges
+           leads to total crash of host PC: shutdown event!
+           Ad hoc patch: Limit block len in "examineAddrList()" in
+           ConsolePDP1144U and Console PDP11SimHU.
+         - only one form for all disc types, with state control for
+           driver, disc and image file.
+
+31.12.2008 V 1.23
+         - macro11 now supports .INCLUDE <filename> as ".INCLU"
+         - SimH now routes serial device I/O also through stdio telnet connection
+         - RL01/R02 read and write disc image
+         - MSCP read and write disc image
+         - Disc read&write with checksum in serial transmission
+         - Disc write with RLE compression, since disc images usually contain large empty areas.
+         - MACRO11.EXE is called over MACRO11.BAT, so the user can bring his own
+           assembler, if he/she likes.
+         - Updates to the PDP-11/70 console panel:
+           - "PROG PHY" shows now the HALT position.
+           - Under SimH, the switch register is set according to the data switches.
+
+
+13.11.2008 V 1.22
+         - Memoryloader accepts the text format
+                   <addr> <value> [<value> ...]
+           ----- Example -----
+           0140000: 010706 005003 012701 177560 012704 140106 112400 100406
+           0140020: 105761 000004 100375 110061 000006 000770 005267 000052
+           0140040: 004767 000030 001403 012703 006400 005007 012702 001000
+           0140060: 004767 000010 110023 005302 001373 000746 105711 100376
+           0140100: 116100 000002 000207 025037 000000 000000 177777
+           -------------------
+           First word in every valid line must be an octal number (=address),
+           else line is ignored.
+
+4.11.2008  V 1.21
+         - Baudrates of 1200, 2400, 4800 added, because Ian King
+           has an unremovable VAX console 11/03 with 1200.
+1.11.2008: V 1.20
+        - Execution tool reflects capabilities of
+          real machine (only on ODT at the moment)
+          - User must tell PDP11GUI the state of RUN/HALT switch
+          - depending on that Reset/SingleStep or Run is possible.
+          - user guidance on connect failures
+          - ODT output scanner rewritten
+          - ODT now operable!
+
+20.10.2008: V1.19
+        - Fixed exception at start after first installation without
+          any registry entries.
+        - Fixed uninitialized Memory window start addr.
+        - fixed bug in TMemoryCellGroups.ChangeAdddressWidth()
+        - Corrected display of error line in MACRO-11 source and listing
+
+8.10.2008: V 1.18
+        - I/O page scanner
+        - pdp11/70 Panel
+        - rework: proper internal represantation of
+          virtual 16-bit, physical 16/18/22 bit addresses.
+        - new file format for Memory Loader: octal Address-Value-pairs in an ASCII file.
+        - Start development with real ODT machines:
+          one evening with the 11/23+ at www.hatchi.de
+
+29.09.2008:  V 1.17
+        - Major rework: PDP11GUI can now distinguish on every place
+          between phyiscal/virtual addresses.
+        - Tests for ODT console, thanks to Steve!
+
+28.8.2008:  V 1.16
+        Preparation for ODT:
+        - "feature" flags specify, which functions (Run,Halt,reset,SingleStep)
+          are supported by a certain console.
+        - Console for fake 11/44 is an own class now, derived from
+          TConsolePD1144
+        - new Tool : "Memory Loader"
+          loads different styles of memory dumps.
+
+21.8.2008:  V 1.15
+        - Rewrite interfaces to Terminal, Consoladapter and physical ports,
+          Rewrite Console logic.
+          Released to Steve Maddison .. he likes it.
+
+11.8.2008: V 1.14
+        - Cleanup, for documentation. Help/about.
+
+2.8.2008: V 1.13
+        - Errors in MACRO11 are displayed red in Source and Listing.
+        - Disassembly now in own Tool window.
+
+28.7.2008: V 1.12
+        - Execute-Form shows a Disassembly of current execution position.
+        - Mikrocode of PDP-11/44 can be loaded from scanned listings
+          "EY-C3012-RB-001 PDP-1144 Processor Maintenance Supplementary Listings (microcode) Apr-81"
+
+20.7.2008: V 1.11
+        - Simulation ofs PDP-11-Memory Management (MMU),
+           to convert virtual program counter values into physical addresses.
+           The TPdp11MMU-Object has its own MemoryCells, to hold
+           a copy of PDP-11-MMU-register values.
+           These are coupled with all other memorycells.
+           MMU-Tool-Form displays the state of MMO and
+           lists the virtual->physical mapping.
+
+13.7.2008: V 1.10
+        - SimH can be connected over telnet
+        - CPU-Execute: run, stop, single step.
+          PC-position is displayed in MACRO-11 source code listing.
+
+24.6.2008:
+        - coupled FormBitfields: click onto a memorycell displays in BitField-Form
+          informationen about bit of a register. Fully editable.
+
+22.06.2008: V1.00
+        - inifile, Terminal, registerlist, memorytable, MDI-Froms,
+          simulated PDP11/44, simulated baud rate, Macro11-Source+Listing,
+          coupled memorycellgroups.
+

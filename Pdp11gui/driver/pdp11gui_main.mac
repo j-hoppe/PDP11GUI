@@ -1,0 +1,481 @@
+	.title	pdp11gui_main
+
+	.asect
+
+;
+; ----------------------------------------------------
+; Common main entry point for all PDP11GUI drivers
+;
+
+; Communication between PDP11GUI and driver
+;
+; 1. Principal operation
+; ===============
+; Working cycle is always:
+; - request: tramsit buffer to driver
+;	   operation
+;   response: send another buffer back to pdp11gui
+; "request" is transmission PDP11GUI -> driver
+; "response" is transmission driver -> PDP11GUI
+;
+; 2. Format of data transmission
+; ==========================================
+;
+; 2.1. Generic transmission container format:
+; ===========================================
+; Entity for transmission and addressing is always word.
+; transmission :== <transmission_word_count> <checksum> <opcode>  <block0>, <block1>, ...
+; block := <block_word_count> <data0, ..data 1,,, data>
+; <transmission_word_count> = len(checksum) + len (opcode) + len(block1) + len(block2) ....
+;			  = 2 + blockcount * (1 + block word count)
+;
+; - opcode: "command" on pdp11gui -> driver; "status" on driver -> pdp11gui
+; - "transmitted data maybe more then "<transmission_word_len>", because only whole tripletts can be transmitted.
+; - blockcount depends on opcode: 0, 1 or 2 blocks are used
+;	requests: block 0 = parameters
+;	block 1= drive data (if opcode = write)
+; response: block 0 = error status (if opcode != 0)
+;	block 0 = driver data (if opcode = 0)
+;
+; - memory layout of transmission buffer:
+; xmbffr:	= .	; base for buffer frame
+; xmwc: 	.blkw	1 ; transmission	wordcount: exact wordcount, excluding len itself and checksum, but including opcode
+; xmcs: 	.blkw	1 ; transmission	checksumbuffer-2: buffer checksum. checksum of all data words in rxbuff
+; xmbuff:	= .	; base for buffer payload
+;		; buffer is max 2 blocks: 1st = 8 parameters, 2nd = 16kwords drive data long
+;		; Buffer is located at end of code, can grow up tu 48kbyte boundary
+xmopcd		= xmbuff	 ; transmission opcode = word 0 of buffer
+;
+;
+; 2.2 Data buffer layouts for requests:
+; ======================================
+;
+; 2.2.1  Layout
+; ===============
+;
+; For data transfer requests, block 0 contains parameters, these are shadowed to "reqprm"
+;	(so results can be written into transmission buffer without overwriting parameters
+;
+	. = 100 	; do not use trap vector space
+reqprm: .blkw	10	; copy of parameters: longest parameter block is 8 words
+
+	; The parameter layout is almost the same same for all disk types and
+	; disk operations.
+	; pdp11gui must transmit these 7 words in block 0!
+prcba	= reqprm+0	; xmbuff+4: controller base address
+prunit	= reqprm+2	; xmbuff+6	; parameter 1: unit number of disc: 0 or 1
+prflags = reqprm+4	; xmbuff+10	; parameter 5: flags
+				; bit 0 = #1 = "suppress data transmission after read"
+				; bits 1:3 are "PDP11GUI "DriverDeviceType"
+				; bit 1 = #2 =
+				;		RX02 driver: 0 = single, 1 = double density
+				;		RK611: 0= RK06, 1 = RK07
+				; bit 2 = #4 =
+				;		RX02 driver: 0 = RX01, 1 = RX02
+prwlen	= reqprm+6	; xmbuff+12 count of word to read/write
+prcyl	= reqprm+10	; xbuff+14	; parameter 2: cylinder, always starting with 0
+prhead	= reqprm+12	; xbuff+16	; parameter 3: head, always starting with 0
+prsect	= reqprm+14	; xbuff+20	; parameter 4: sector. always starting with 0
+; MSCP is different: starting block # instead of cyl/head/sector
+prstb0	= reqprm+10	; start block number lo word
+prstb1	= reqprm+12	; start block number hi word
+
+
+; for Halt, 1st param is monitor entry address, or 0.
+prmnea	= reqprm+0	; xmbuff+4: MoNitor Entry Address
+
+
+
+
+
+; <param0,param1, ...>
+; block 1 contains drive data (on disk write)
+req0wc: .blkw	1	; addr of len word of block0/1
+req0dt: .blkw	1	; address of 1st data word for block 0/1,  depending on opcode
+; - reqdat: "request disk data", start adress of block 1,  including len
+req1wc: .blkw	1
+req1dt: .blkw	1
+;
+; 2.2.2 request opcodes:
+; ======================
+;	addr = xmopcd
+opecho	= 1	; echo block, with inverted data.
+opinit	= 2	;
+opread	= 3	; read multiple sectors in one track
+opchek	= 4	; check multiple sectors in one track
+opwrite = 5	; write  "  "	"
+ophalt	= 6	; halt driver, or jump back to monitor (M9312 console emulator)
+oprest	= 7	; execute Bus RESET
+
+;
+; 2.2.3 parameters
+; ===============
+; 2.2.3.1	opcode opinit
+; +0		<controller_addr>
+; +1		<unitnr>
+;
+; 2.2.3.2	opcodes opread,opwrite,opchek
+; RL02,RX02,RM03:
+;
+; reqprm
+; word offset	parameter
+; +0		<controller_addr>
+; +1		<unitnr>
+; +2		<flags>
+; +3		<count of words to read/write>
+; +4		<cylinder>
+; +5		<head>
+; +6		<sector>
+
+; MSCP is slightly different:
+; +4		<start block lo word>
+; +5		<start block hi word>
+; +6		0
+;
+;
+; 2.3 Data buffer layouts for responses:
+; ======================================
+;
+; 2.3.1  Layout
+; ===============
+;	only block 0 and opcode ist used.
+; - rspsta: opcode, as "response status"
+rspsta	= xmopcd	; status (0=OK; else	error location)
+
+; - rspwc: wordcount for response is calculated in "doresp"
+; rspwc = xmbuff+2	; len of data, driver codes counts data here
+; - rspdat: start adress of block 0 for response, including len. used for error and result disk data
+rspdat	= xmbuff+4	; 1st data word of block 0; data:	error vector, or disk data
+; on jump to "doresp", r3 must contain next unwritten addr in resdat
+; this is used to calculate len of whole transmission
+
+
+;
+; 2.3.2  Response	status
+; ===============
+; 2.3.2.1	Error
+; status	!= 0: Error. error code  contains "location" in driver source code
+;	  data are additional info (controller registers)
+;	  len is fixed as symbol "errwcnt", but depends on disk controller hardware
+;
+; 2.3.2.1	opcode	"opinit"
+; status	= 0: OK.
+;  + 0 drive sub type. Is interpreted depending on driver type.
+; 2.3.2.1.1	RL01,2, RM03, RX02:
+;		disk sub type is transmitted back.
+; 2.3.2.1.2	MSCP
+;	   [0] unit identifer 1st lo	(from ONLINE)
+;	   [1] unit identifer 1st hi	(from ONLINE)
+;	   [2] unit identifer 2nd lo	(from ONLINE)
+;	   [3] unit identifer 2nd hi	(from ONLINE)
+;	   [4] media type identifier lo (from ONLINE)
+;	   [5] media type identifier hi (from ONLINE)
+;	   [6] reserved 		(from ONLINE)
+;	   [7] reserved 		(from ONLINE)
+;	   [8] blockcount lo	       (from ONLINE)
+;	   [9] blockcount hi	       (from ONLINE)
+;	   [10] volume serial num lo	 (from ONLINE)
+;	   [11] volume serial num hi	 (from ONLINE)
+;	   [12] cylinder size		 (from GET UNIT STATUS)
+;	   [13] group size		 (from GET UNIT STATUS)
+;	   [14] cylinder size		 (from GET UNIT STATUS)
+;	   [15] reserved	    (from GET UNIT STATUS)
+;	   [16] RCT size		 (from GET UNIT STATUS)
+;	   [17] RBNS/copies		(from GET UNIT STATUS)
+
+; 2.3.2.2	opread, opcheck
+; status	= 0: OK.
+; 2.3.2.3	opwrite
+;  status	= 0: OK.
+; + 0..len-1	disk data
+
+;
+; 3. Code modules
+; ===============
+; Code is split in common code (block transfer for request and responses)
+; and disk specfic implementation of read, write and error
+;
+; 3.1 Common code:
+; ===============
+; 3.1.1 main entry
+;   label "dofunc" at 10000 is main entry point
+;   label "doresp" is called bei	each driver function to transmit response back
+;	to pdp11gui and to terminate
+;
+; 3.1.2 Register usage
+; ====================
+; R0 working accumulator
+; R3 is pointer in data buffer for read/write
+; R4 is the controller base register
+; R5 is always an "location mark" for a certain code postion
+; on error it is the error reason.
+; Carry-flag C is error indicator, see below
+;
+; 3.1.3 Error handling
+; ====================
+; The Carry flag "C" is used as a error indicator
+; if C is set after a sub routine call, an error occured,
+; and reqsta, reqwc and reqdata contains already error information. r3 points to end of data
+; The caller must return then immediately
+; Example:
+;
+; sub1:
+;	...
+;	tst	something
+;	bne	9$	; error detected: create Exception
+;	...
+;	clc		; no error, clear carry
+;	return
+;
+; 9$	; ERROR
+;	call	@#chkerr	; prepare block buffer wit herror data, sets carry with "sec
+;	return
+;
+; caller:
+;	...
+;	call	@#sub1
+;	bcs	9$	; error: R0..R5 contain error codes, exit
+;	....
+; 9$:	return
+
+
+
+	; --------------------------------------------------------
+	; catch vectors. halting here means error!
+	. = 0
+	.word	trprv	;Reserved vector
+trprv:	halt
+
+	. = 004 	; Time-out/system error vector
+	.word	trpbe	; Bus Error trap
+trpbe:	halt
+
+	. = 010 	; Illegal and reserved instruction vector
+	.word	trpri	; Reserved instruction trap
+trpri:	halt
+
+	. = 014 	; BPT instruction vector
+	.word	trpbpt
+trpbpt: halt
+
+	. = 020 	; IOT instruction vector
+	.word	trpiot
+trpiot: halt
+
+	. = 024 	; Power fail vector
+	.word	trppf
+trppf:	halt
+
+	. = 030 	; EMT instruction vector
+	.word	trpwmt
+trpwmt: halt
+
+	. = 034 	; TRAP instruction vector
+	.word	trptrp
+trptrp: halt
+
+
+
+	; --------------------------------------------------------
+	. = 10000
+
+stack	= .
+
+	; main entry point
+dofunc:
+	mov	#stack,sp	; setup stack
+	; 1) receive data. only register values are evaluated
+	call	@#blkrcv	; todo: do not ignore errors
+
+
+	; checksum ?
+	call	@#calccs	; calculate checksum to R0
+	cmp	r0,@#xmcs	; compare with received checksum
+	beq	1$
+	mov	#rspsta,r3	; write into block 0: status, wordcount,len val0, val1, val ,,,
+	mov	#1,(r3)+	; set opcode = error location #1
+	mov	#2,(r3)+	; word count: 2 more result words
+	mov	r0,(r3)+	; calculated checksum
+	mov	@#xmcs,(r3)+	; received checksum
+	sec			; set error exception flag
+	jmp	@#doresp	; r3 = end of transmission buffer
+
+1$:
+	; calculate addresses of wordcount and data for block 0
+	mov	#xmbuff+2,r3
+	mov	r3,@#req0wc	; addr of len of block 0 = "ptr to len"
+	add	#2,r3
+	mov	r3,@#req0dt	; addr of data in block 0
+
+
+; eval opcodes
+	; 1) opcodes without parameters in block 0
+	mov	@#xmopcd,r0
+
+	cmp	r0,#oprest
+	bne	10$
+	reset
+	; now return "OK" without data
+	mov	#rspdat,r3	; point to data start = no data
+	clc			; clear error exception flag
+	jmp	@#doresp
+
+10$:	cmp	r0,#opecho
+	bne	20$
+	jmp	@#doecho	; echo block, implemented by serialxfer
+
+
+20$:	; 2) opcodes with parameters in block 0, and optional data in block 1
+	; copy driver parameters from buffer to shadow
+	mov	@#req0wc,r3	; point to len of block 0
+	call	@#dupprm	; on exit: r3 = start of block 1, if any
+	; calculate addresses wordcount and data for block 1 (used only for "write")
+	mov	r3,@#req1wc	; addr of len of block 1
+	add	#2,r3
+	mov	r3,@#req1dt	; addr of start of block 1
+
+30$:	cmp	r0,#ophalt
+	bne	40$
+	; exit driver with HALT or jump to monitor
+	mov	@#prmnea,r0	; load argument for HALT
+	bne	31$
+	halt			; if 0: execute HALT
+31$:	mov	r0,pc		; if address: jump to MoNitor Entry Address
+
+40$:	cmp	r0,#opinit
+	bne	50$
+	jmp	@#doinit	; "initialize disk" implemented by driver
+50$:	cmp	r0,#opread
+	bne	60$
+	jmp	@#doread	; "read sectors" implemented by driver
+60$:	cmp	r0,#opchek
+	bne	70$
+	jmp	@#dochek	; "check sectors" implemented by driver
+70$:	cmp	r0,#opwrit
+	bne	80$		;  unknown opcode
+	jmp	@#dowrit	 ; "write sectors" implemented by driver
+
+80$:	 ; illegal opcode: generate error
+	mov	#rspsta,r3	; write into buffer: status, wordcount,len val0, val1, val ,,,
+	mov	#2,(r3)+	; set error location #2
+	mov	#1,(r3)+	; word count: 1 result words
+	mov	r0,(r3)+	; the illegal opcode
+	sec			; set error exception flag
+	jmp	@#doresp
+
+
+; --- doresp - end current operation and send result in response transmission
+; rspsta, rspdat are filled with error data or regular disk data. rspwc is calulated
+; r3: points to word after result buffer, is used to calculated
+; len of block 0 and transmission buffer word count. If noting is sent back, r3 == rspdat
+; Carry C  = error flag.
+; Carry set: return exception, do not clear rspsta
+; Carry clear:	return normal result
+;	rspsta is cleared ("OK")
+;	data is transmitted
+
+doresp:
+	; in case of error, buffer is already filled with error data
+	bcc	8$		; no carry, no error
+	; -- error! error information is already in buffer
+	; halt			; option to stop on error
+	br	9$
+
+	; -- no error. data buffer and len is filled
+8$:	clr	@#rspsta	; clear status = OK
+9$:	; transmit buffer back
+	; r3 = buffer end: calculate transmission buffer count
+	; transmission buffer: checksum + opcode + len + data
+	sub	#rspdat,r3	; subtract buffer base. r3 = bytes in response data
+	clc
+	ror	r3		; bytes-> word: (unsigned)r3 /= 2
+	; asr	r3		; r3 = words in response data
+	mov	r3,@#rspdat-2	; save data count in len field of block 0
+	add	#3,r3		; include response len (block 0)  and checksum+opcode
+	mov	r3,@#xmwc
+	call	@#blkxmt	; transmit data, checksum is also calculated
+
+    ; now wait for next command
+    jmp    @#dofunc
+
+	; halt			; only regular halt
+
+
+
+
+; --- dupprm
+; parameters in input block 0 must be copied to global variables area "reqprm"
+; since request buffer content may be overwritten bei read/error operation
+; driver must define global variables for parameter
+; framework uses "prmsta" and "prmlen" to copy parameters from transmission
+; input: r3 on len of block 0
+; Exit: r3 is after block 0. if block0 is empty
+ dupprm:
+	; copy input params from buffer to
+	mov	#reqprm,r2	: start of parameter buffer
+	mov	(r3)+,r1	; r1: word count := word len of block 0
+	beq	9$		; r1 = 0: stop
+1$:
+	mov	(r3)+,(r2)+	; { *dst++ = *src++
+	dec	r1
+	bne	1$		; } while (--r1)
+;	sob	r1,1$		; SOB not standard! (11/45?)
+9$:
+	return			; r3 points to next word after block 0
+
+
+
+;
+;
+; 3.2 Driver specific code:
+; ========================
+;
+; map parameters to buffer positions. example pdp11gui_rl02.mac
+; prcba 	=	reqprm+2	; parameter 0: controller base address
+; prunit	=	reqprm+4	; parameter 1: unit number of disc: 0 or 1
+; prcyl 	=	reqprm+6	; parameter 2: cylinder
+; prhead	=	reqprm+10	; parameter 3: head, always 0
+; prsect	=	reqprm+12	; parameter 4: sector: 0..25 (not: 1..26!)
+; prflags	=	reqprm+14	; parameter 5: flags
+;				; bit 0 = #1 = "suppress data transmission after read"
+;				; bit 1 = #2 = double density
+;				; bit 2 = #4 = RX02
+; ....
+; map error registers to buffer
+; ;ressta = rxbuff+0		; result status. common to all drivers, already defined
+; ;reswc  = rxbuff+2		; 2nd word is len. common to all drivers. here always "1", only RXES is returned
+; errcs =	rspdat+0	; param 0: RXCS register
+;
+;	  .include	  pdp11gui_main.mac
+; doinit:
+;	  ...
+; doread:
+;	  ...
+; dochek:
+;	  ...
+; dowrit:
+;	  ...
+;
+; ; -- error routine: check Hardware for error.
+; ; r5: "location mark"
+; X if ok: Carry clear
+; ; if error: Carry set, and buffer positions "err*" already set.
+; ;		  Transmission buffer and input parmeters are overwritten !
+; on exit: R3 points to end of error buffer!
+; ;chkerr:
+;	  tst	  ....	  ; test a bit 15
+;	  bpl	  1$	  ; no error
+;	  ; error!
+;	  ; input parameter in transmission buffer are now overwritten !
+;	  mov	  r5,@#ressta	 ; set error code
+;	mov #rspdat,r3
+;	  mov	  #error_wordcount,@#reswc    ; set word count. alwys the sameset error code
+;	  ... query "error_wordcount" controller registers and save in buffer locations "(r3)+"
+;	  sec			  ; set error flag
+;	  return		; r3 points to next word after error data
+; 1$:	  ; no error. do not overwrite transmission buffer
+;	  clc			; clear error flag
+;	  return
+;
+;
+;

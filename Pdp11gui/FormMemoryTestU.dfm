@@ -114,6 +114,7 @@ object FormMemoryTest: TFormMemoryTest
       Style = csDropDownList
       TabOrder = 7
       Items.Strings = (
+        '2 (single wordl)'
         '1 K / 2000'
         '2 K / 4000'
         '4 K / 10000'

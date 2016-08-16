@@ -640,6 +640,7 @@ procedure TSerialTransfer.Execute (
       else timeout_ms := 0 ;
       timeout_ms := timeout_ms + 1000 ; // 1 Sek reserve
       // Zeit für die Abarbeitung des Codes mit einplanen
+      // retries des I/O subsystems im worst case!
       timeout_ms := timeout_ms + pdp11ProcTimeout_ms ;
       Log('TSerialTransfer.Execute: start ReceiveCharBuffer(). Timeout=%d+%d+%d=%d ms',
               [timeout_ms-1000-pdp11ProcTimeout_ms, 1000, pdp11ProcTimeout_ms, timeout_ms]);

@@ -2,6 +2,14 @@
 PDP11GUI Revision history:
 --------------------------
 
+16.8.2016:  V 1.48.0    Published
+8.8.2016:   V 1.47.11
+                - Parameter fix in TMediaImage_DiscDevice_Robotron_K5501,2
+                - MediaImageDevice: maxBlockAccessTime_ms als extra Zeit für
+                  Blockzugriff.
+                - FormMediaImage: rework of file load/save logic.
+                  "meta info/bad block list" can also be saved manually now.
+                - FormMediaImage: "ErrorStop" now terminates read or write
 29.6.2016   V 1.47.10
                 - added disk geometries for Robotron K5501/2
                 - bugfix:  block count in "TFormDiscImage.ReadMultiBlock()".

@@ -196,7 +196,7 @@ procedure TFormMemoryTest.UpdateDisplay(Sender: TObject);
       startaddr.val := 0 ;
       endaddr.mat := MemoryGrid.memorycellgroup.mat ;
       endaddr.val := 2 * max_memoryblock_wordcount - 2 ;
-      ChipAddrSizeComboBox.ItemIndex := 2 ; // "4K"
+      ChipAddrSizeComboBox.ItemIndex := 3 ; // "4K"
 //      MemoryBlockSizeEdit.Text := Dword2OctalStr(max_memoryblock_wordcount) ;
 //      Caption := setFormCaptionInfoField(Caption, '0') ;
     end ;
@@ -259,12 +259,13 @@ procedure TFormMemoryTest.SetStartAddrButtonClick(Sender: TObject);
     endaddr.val := endaddr.val and not 1 ; // make even
 
     case ChipAddrSizeComboBox.ItemIndex of
-      0: chipaddrsize := 1024 ; // 1K
-      1: chipaddrsize := 2048 ; // 2K
-      2: chipaddrsize := 4096 ; // 4K
-      3: chipaddrsize := 16384 ; // 16K
-      4: chipaddrsize := 65536 ; // 64K
-      5: chipaddrsize := 262144 ; // 256K
+      0: chipaddrsize := 2 ; // single word cell
+      1: chipaddrsize := 1024 ; // 1K
+      2: chipaddrsize := 2048 ; // 2K
+      3: chipaddrsize := 4096 ; // 4K
+      4: chipaddrsize := 16384 ; // 16K
+      5: chipaddrsize := 65536 ; // 64K
+      6: chipaddrsize := 262144 ; // 256K
     end;
 
     if endaddr.val < startaddr.val then begin // swap?

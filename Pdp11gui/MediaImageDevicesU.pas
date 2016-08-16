@@ -187,6 +187,9 @@ type
 
       fixCapacity : boolean ; // false: Größe ist unbeschränkt (papertape)
 
+      maxBlockAccessTime_ms: integer ; // Zeit für Zugriff auf Block
+      // zeit für Positioning und retries
+
 
       { --- Laufdaten --- }
       // aktuelle discaddr
@@ -654,6 +657,8 @@ constructor TMediaImage_DiscDevice_RL01.Create ;
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
 
+    maxBlockAccessTime_ms := 0 ; // to be defined
+
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
     assert(MultiBlockCount * BlockSize <= 32768) ;
@@ -680,6 +685,8 @@ constructor TMediaImage_DiscDevice_RL02.Create ;
     MultiBlockCount := SectorCount ; // ein Multiblock = 1 Track
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
+
+     maxBlockAccessTime_ms := 0 ; // to be defined
 
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
@@ -710,6 +717,8 @@ constructor TMediaImage_DiscDevice_RX01.Create ;
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
 
+    maxBlockAccessTime_ms := 0 ; // to be defined
+
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
     assert(MultiBlockCount * BlockSize <= 32768) ;
@@ -737,6 +746,8 @@ constructor TMediaImage_DiscDevice_RX02_SD.Create ;
     MultiBlockCount := SectorCount ; // ein Multiblock = 1 Track
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
+
+    maxBlockAccessTime_ms := 0 ; // to be defined
 
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
@@ -766,6 +777,8 @@ constructor TMediaImage_DiscDevice_RX02_DD.Create ;
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
 
+    maxBlockAccessTime_ms := 0 ; // to be defined
+
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
     assert(MultiBlockCount * BlockSize <= 32768) ;
@@ -793,6 +806,8 @@ constructor TMediaImage_DiscDevice_RM02.Create ;
     MultiBlockCount := SectorCount ; // ein Multiblock = 1 Track =
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
+
+    maxBlockAccessTime_ms := 0 ; // to be defined
 
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
@@ -824,6 +839,8 @@ constructor TMediaImage_DiscDevice_RK05.Create ;
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
 
+    maxBlockAccessTime_ms := 0 ; // to be defined
+
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
     assert(MultiBlockCount * BlockSize <= 32768) ;
@@ -849,6 +866,8 @@ constructor TMediaImage_DiscDevice_RK06.Create ;
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
 
+    maxBlockAccessTime_ms := 0 ; // to be defined
+
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
     assert(MultiBlockCount * BlockSize <= 32768) ;
@@ -873,6 +892,8 @@ constructor TMediaImage_DiscDevice_RK07.Create ;
     DataBytesAreWordLSBs := false ;
     fixCapacity := true ;
 
+    maxBlockAccessTime_ms := 0 ; // to be defined
+
     // 32K ist die grösse des Buffers im treiber
     // See drivers\pdp11gui_serialxfer.mac, label rxbfdt:
     assert(MultiBlockCount * BlockSize <= 32768) ;
@@ -884,12 +905,15 @@ constructor TMediaImage_DiscDevice_RK07.Create ;
   // There are variants with 6, 10 and 14 heads !
 constructor TMediaImage_DiscDevice_Robotron_K5501.Create ;
   begin
-    inherited ;
+    inherited ; // params from RK06
     Name := 'K5501_14' ;
     CylinderCount := 210 ; // 200+10
     HeadCount := 14 ;
     SectorCount := 24 ;
     BlockCount := CylinderCount * HeadCount * SectorCount ;
+    MultiBlockCount := SectorCount ; // ein Multiblock = 1 Track
+    assert(MultiBlockCount * BlockSize <= 32768) ;
+    maxBlockAccessTime_ms := 30000 ; // 30 seconds time for retries?
   end ;
 
   // is like RK07, but different geometry
@@ -897,12 +921,15 @@ constructor TMediaImage_DiscDevice_Robotron_K5501.Create ;
   // There are variants with 6, 10 and 14 heads !
 constructor TMediaImage_DiscDevice_Robotron_K5502.Create ;
   begin
-    inherited ;
+    inherited ; // params from RK07
     Name := 'K5502_14' ;
     CylinderCount := 588 ; // 561+27
     HeadCount := 14 ;
     SectorCount := 34 ; // 32+2
     BlockCount := CylinderCount * HeadCount * SectorCount ;
+    MultiBlockCount := SectorCount ; // ein Multiblock = 1 Track
+    assert(MultiBlockCount * BlockSize <= 32768) ;
+    maxBlockAccessTime_ms := 30000 ; // 30 seconds time for retries?
   end ;
 
 

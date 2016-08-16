@@ -170,6 +170,15 @@ object FormDiscImage: TFormDiscImage
         OnExit = MediaSerialNumberEditExit
       end
     end
+    object SaveMetaInfoButton: TButton
+      Left = 428
+      Top = 20
+      Width = 87
+      Height = 25
+      Caption = 'Save meta info'
+      TabOrder = 5
+      OnClick = SaveMetaInfoButtonClick
+    end
   end
   object ReadWriteGroupBox: TGroupBox
     Left = 0
@@ -521,18 +530,22 @@ object FormDiscImage: TFormDiscImage
       OnClick = DriverInvalidateButtonClick
     end
   end
-  object OpenDialog1: TOpenDialog
+  object OpenDiskImageDialog: TOpenDialog
     Filter = 'Byte stream picture|*.bmp|All|*.*'
-    Left = 162
-    Top = 416
+    Left = 18
+    Top = 414
   end
-  object SaveDialog1: TSaveDialog
+  object SaveDiskImageDialog: TSaveDialog
     Filter = 'Byte stream picture|*.bmp|All|*.*'
-    Left = 108
-    Top = 408
+    Left = 112
+    Top = 384
   end
-  object OpenDialog2: TOpenDialog
-    Left = 214
-    Top = 472
+  object OpenDiskImageOverlayDialog: TOpenDialog
+    Left = 50
+    Top = 404
+  end
+  object SaveDiskMetaInfoDialog: TSaveDialog
+    Left = 170
+    Top = 388
   end
 end

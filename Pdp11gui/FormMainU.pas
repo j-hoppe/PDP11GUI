@@ -25,8 +25,6 @@ unit FormMainU;
 
 
 TODO
-memoryCell:
-bei langen Deposit(Examines ein progressbar-Fenster zeigen
 
 "Autorefresh" von mem und registern nach CPU halt/single step
 
@@ -308,7 +306,7 @@ uses
 /// Globales Interface zur Logging-Komponente
 procedure Log(s: string) ;
   begin
-//  OutputDebugString(s);
+    // OutputDebugString(s);
     FormMain.FormLog.Log(s);
   end;
 

@@ -54,7 +54,7 @@ doinit: 	; RK611 executes "Get Status" with Reset
 	mov	#rspdat,r3	; if no error: return no data
 	mov	#101,r5 	; error location #101
 
- 	mov	#100000,rkcs1(r4) ; reset controller
+	mov	#100000,rkcs1(r4) ; reset controller
 
 	clr	r0
 	call	@#go		; start "Drive Select"
@@ -159,10 +159,12 @@ chkerr:
 	mov	rkds(r4),r0
 	; SVAL = 15 = Status Valid
 	; DRDY = 7 = Drive Ready
-	; VV = 6 = Volume Valid
+	; VV = 6 = Volume Valid (no media change since init)
 	; DRA = 0 = Drive Available
 	com	r0
-	bit	#100301,r0	; SVAL,DRDY,VV,DRA must be set	  #100301
+;	 bit	 #100301,r0	 ; SVAL,DRDY,VV,DRA must be set
+	; do not test "Volume Valid" ... not implemented on Robotron AFP K5165
+	bit	#100201,r0	; SVAL,DRDY,DRA must be set
 	bne	2$		; any set in complement-> not all set -> error
 
 	clc			; no error: clear error flag

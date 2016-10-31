@@ -2,7 +2,26 @@
 PDP11GUI Revision history:
 --------------------------
 
-16.8.2016:  V 1.48.0    Published
+22.10.2016: V 1.48.5
+                - Disk Image Read/Write: after driver start, wait until
+                  any serial output is discarded.
+                  Necessary for "(Program)" message of 11/44 v3.40.
+24.9.2016:  V 1.48.4
+                - Disk Image Read/Write: Current BlockNr saved with Bad Block list
+                  and restored on Load, if "Track" checkbox checked.
+                - Robotron_K5502 reduced from 34 to 32 sectors
+5.9.2016:   V 1.48.3
+                - Disk Image Read/Write: Bad Block list cleared on "ResetAndOpenDisk."
+25.8.2016:  V.1.48.2
+                - Disk Image Read/Write: RLE compression recognizes
+                  now 2-word patterns. Some disks format sectors with a
+                  alternating word pattern, these can now be compressed.
+                  (Robotron K5501). Compresses also automatically 1 word patterns.
+17.8.2016:  V.1.48.1
+                - Terminal can Beep on ^G BEL (Mattis Lind)
+                - Image read/write: state after clear start
+16.8.2016:  V 1.48.0
+                -  Published with announcement
 8.8.2016:   V 1.47.11
                 - Parameter fix in TMediaImage_DiscDevice_Robotron_K5501,2
                 - MediaImageDevice: maxBlockAccessTime_ms als extra Zeit für

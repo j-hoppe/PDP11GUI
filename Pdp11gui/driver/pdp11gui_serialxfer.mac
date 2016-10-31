@@ -21,10 +21,12 @@
     ; -	characters below #$20 are to be	ignored
     ; -	'{' = 0x7b = 0173 is STARTCHAR,	 '}' = 0x7D = 0175 is ENDCHAR
     ; - all other chars instead of START are ignored. '~' is used as delay char.
-    ; -	RLE encoding: indicator	char RLECHAR '|' before	char[0]	modifies the meaning of
+    ; -	RLE encoding: a repeating pattern of 2 words is recognized.
+    ;   The indicator char RLECHAR '|' before char[0] modifies the meaning of
     ;	the next 8 char/3 word block:
     ;	'|', char[0], ... char[7] => RLE, word[0], word[1], word[2]
-    ;	with word[0] = repeat, word[1] = value,	word[2]	= don't	care
+    ;	with word[0] = block_len, word[1] = pattern_1, word[2] = pattern_2
+    ;   ! Number of encoded words = block_len => block_len always even !
     ; -	RLE Block length processing time:
     ;	 PDP-11	CPU must copy <blocklen> words within one character transmission time.
     ;	 blocklen is limited by	high baudrates and slow	CPUs.
@@ -156,9 +158,10 @@ blkrcv:
 	sub	#3,r1
 	mov	r1,r5		; save r1=word count
 	mov	(r0),r4		; r4 = rle_count
-	mov	2(r0),r1	; rle_value
-	mov	r4,r2		; count=rlw_count
-	call	@#memset	; r0=ptr, r1 = value, r2=count.
+	mov	2(r0),r1	; rle pattern_1
+	mov	4(r0),r2	; rle pattern 2
+	mov	r4,r3		; count=rle_block_len. Must be even!
+	call	@#memset	; r0=ptr, r1 = value1, r2=value2, r3=count.
 	; r0 is	now at next unwritten buffer pos, r2=0
 	mov	r5,r1		; restore word count
 	add	r4,r1		; word count +=	rel_count
@@ -225,7 +228,7 @@ blkxmt:
 ;	for rle	triplett.
 ;   triplett[r0] contains rle triplett.
 ;   r1 -= rle_count
-	add	#3,r1		; // subroutine	trpxmt decrments r1
+	add	#3,r1		; // subroutine	trpxmt decrements r1
 
 
    ; rle triplett was written into data	buffer at r0.
@@ -397,12 +400,13 @@ calccs:
 	; encrle
 	; try to ENCode	data at	r0 as RLE block
 	; r0: pointer into buffer
+	; r1: word count
 	; r5: pointer to word after buffer end
 	; return
 	; carry	clear: compression succesfull
 	;	r0 points to
-	;	rle triplett: <repeat> <dataword> 0 is written diretly befotre
-	;	the next uncompressable	word in	data buffer:
+	;	rle triplett: <repeat> <pattern_1> <pattern_2> is written
+	;	directly before the next uncompressable	word in	data buffer:
 	;	r0 points to rle triplett.
 	;	r1 is decremented by rle block len
 	; carry	set : compression unsuccessful:
@@ -410,49 +414,61 @@ calccs:
 	;	data and r0, r1	unchanged
 	;
 	; Since	buffer data is overwritten with	rle triplett,
-	; rle must find	at least 3 equal data words.
+	; rle must find	at least 4 equal data words.
+	; original buffer       w      w                 w
+	; Over written with   repeat pattern_1 pattern_2
+encrl1:	.blkw	1		; backup r0
+
 encrle:	; encode rle compression, data r0, count = r1
 ;	sec ; disable RLE encoding
 ;	return
 
 	; limit: rle block len max 256
+	mov	r0,@#encrl1	; backup original r0
 	mov	r0,r2		; r2 = data ptr
-	mov	#1,r3		 ; repeat counter
-	mov	(r2)+, r4	; r4 = data word equal in block
+	mov	r0,r4		; r4 = ptr to repeated pattern
+	mov	#2,r3		; block_len
+	add	#4,r2		; skip to word behind pattern
 	; loop,	until
 1$:
-	; r2 still inside of buffer?
-	cmp	r2,r5
+	; r2 still two words before buffer end?
+	mov	r2,r0
+	add	#2,r0
+	cmp	r0,r5		 ; if (r2+1) < r5 then ....
 	bhis	2$		 ; stop, if r2 reached end of buffer
 
-	cmp	(r2),r4	       ; next data word	still of same value?
-	bne	2$		; next data word != reference: end compression loop
-	; next word still equal
+	; are the 2 words at r2 identical to the pattern at r4 ?
+	cmp	(r2),(r4)
+	bne	2$		; not identical
+	cmp	2(r2),2(r4)
+	bne	2$		; not identical
+	add	r2,#4		; skip compressed words
 
-	tst	(r2)+		; inc r2
-	inc	r3		; count	repeat
+	add	#2,r3           ; inc block_len by 2 words
+	add	#4,r2		; inc data pointer by 2 words
 	; limit	len of rle blocks. PC CPU must decompress whole	block within
 	; one character	receive	time. PD11 CPU can 32 loops, modern x86	surely > 1000
-	cmp	r3,#377		; more than 256	equal words?
+	cmp	r3,#377		; more than 256	encoded words?
 	ble	1$		; no: try again
 
 2$:	; end of compression loop
-	cmp	r3,#3
+	cmp	r3,#4
 	ble	4$		; to few data compressed: compression failure
 
 	; compression success:
-	; overwrite data buffer	with rle triplett:  <repeat> <data> 0
+	; overwrite data buffer	with rle triplett:  <block_len> <pattern_1> <pattern_2>
 	mov	r2,r0
 	sub	#6,r0		; point	r0 to triplet directly before end of block in data buffer
-				 ; sub #6: triplett len
-	sub	r3,r1		 ; r1 =	words left in buffer
+				; sub #6: triplett len
+	sub	r3,r1		;r1 =	words left in buffer
 
-	mov	r3,0(r0)	  ; repeat count
-	mov	r4,2(r0)	  ; data word
-	clr	4(r0)		  ; filler
+	mov	r3,(r0)		; repeat count
+	mov	(r4),2(r0)	; pattern_1
+	mov	2(r4),4(r0)	; pattern_2
 	clc			; clear	carry
 	br	9$
-4$:    ;compression failure
+4$:    ;compression failure. restore r0
+	mov	@#encrl1,r0	; restore original r0
 	sec			; set carry
 9$:	; exit
 	return

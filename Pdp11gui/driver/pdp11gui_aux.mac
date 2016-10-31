@@ -27,16 +27,20 @@ memclr:
         return
 
         ; memset
-        ; sets R2 words from R0 to value in R1
-        ; Return: R2 is 0, R0 is incremented
-        ; Speed is essential for RLE decoding, so high speed 8 word copy is used
+	; fills memory with double-word pattern
+        ; sets R3 words from R0 to value in R1,R2
+	; r3 must be even!
+        ; Return: R3 is 0, R0 is incremented
+        ; Speed is essential for RLE decoding
         ; Speed calculation: n*3 cycles
 memset:
-        tst     r2
+        tst     r3
         beq     9$          ; already 0
 1$:
-        mov     r1,(r0)+    ;   *dst++ = val    // 16
-        sob     r2,1$
+        mov     r1,(r0)+    ;   *dst++ = pattern_1
+	dec	r3
+        mov     r2,(r0)+    ;   *dst++ = pattern_2
+        sob     r3,1$
 9$:
         return
 

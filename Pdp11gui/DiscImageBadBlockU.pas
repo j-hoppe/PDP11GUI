@@ -151,6 +151,7 @@ type
     public
 
       CartridgeSerialNumber: dword ; // Seriennummer des Mediums is stored in bad sector file
+      NextBlockToProcess: dword ; // Helper for "Next Block" display
 
       constructor Create ;
       destructor Destroy ; override ;
@@ -278,6 +279,8 @@ procedure TBadBlockList.Init(len: integer ; aGrid: TStringGrid) ;
     InternClear ;
     Count := len ;
     setLength(Items, len) ;
+    CartridgeSerialNumber := 0 ;
+    NextBlockToProcess := 0 ;
     for i := 0 to Length(Items) - 1 do
       Items[i] := nil ;
     Show ;
@@ -403,7 +406,8 @@ procedure TBadBlockList.SaveToFile(filename:string) ;
     AssignFile(f, filename) ;
     try
       Rewrite(f) ;
-      writeln(f, Format('serialnumber=%u', [CartridgeSerialNumber])) ;
+      writeln(f, Format('SerialNumber=%u', [CartridgeSerialNumber])) ;
+      writeln(f, Format('NextBlockToProcess=%u', [NextBlockToProcess])) ;
       for i := 0 to Length(Items) - 1 do
         if Items[i] <> nil then
           writeln(f, (Items[i] as TBadBlock).AsText) ;
@@ -431,7 +435,9 @@ procedure TBadBlockList.LoadFromFile(filename:string) ;
         if opcode = 'BADBLOCK' then
           registerBadBlock(s)
         else if opcode = 'SERIALNUMBER' then
-          TryStrToDword(ExtractWord(2, s, ['=']), CartridgeSerialNumber) ;
+          TryStrToDword(ExtractWord(2, s, ['=']), CartridgeSerialNumber)
+        else if opcode = 'NEXTBLOCKTOPROCESS' then
+          TryStrToDword(ExtractWord(2, s, ['=']), NextBlockToProcess) ;
       end ;
     finally
       CloseFile(f) ;

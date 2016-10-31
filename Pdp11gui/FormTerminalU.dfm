@@ -68,6 +68,10 @@ object FormTerminal: TFormTerminal
     object N1: TMenuItem
       Caption = '-'
     end
+    object Beep1: TMenuItem
+      Caption = 'Beep on BEL'
+      OnClick = Beep1Click
+    end
     object Showcontrolchars1: TMenuItem
       Caption = 'Show control chars'
       OnClick = Showcontrolchars1Click

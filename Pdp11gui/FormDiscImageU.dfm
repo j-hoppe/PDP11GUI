@@ -133,10 +133,11 @@ object FormDiscImage: TFormDiscImage
         Caption = 'Media Serial#: 0x'
       end
       object BadBlockListStringGrid: TStringGrid
-        Left = 11
+        Left = 9
         Top = 25
-        Width = 486
+        Width = 496
         Height = 89
+        Hint = 'LOad with iamge file, or set by "Read all" operation.'
         DefaultRowHeight = 16
         Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goColSizing, goThumbTracking]
         TabOrder = 0
@@ -190,9 +191,9 @@ object FormDiscImage: TFormDiscImage
     object BlockNrLabel: TLabel
       Left = 11
       Top = 19
-      Width = 71
+      Width = 57
       Height = 13
-      Caption = 'Current block: '
+      Caption = 'Next block: '
     end
     object BlocksPerTransferLabel: TLabel
       Left = 146
@@ -224,7 +225,7 @@ object FormDiscImage: TFormDiscImage
       OnClick = ProtectVendorAreaCheckBoxClick
     end
     object ReadImageButton: TButton
-      Left = 16
+      Left = 11
       Top = 61
       Width = 160
       Height = 24
@@ -250,7 +251,7 @@ object FormDiscImage: TFormDiscImage
       Text = '0'
     end
     object WriteImageButton: TButton
-      Left = 186
+      Left = 182
       Top = 61
       Width = 160
       Height = 24
@@ -259,7 +260,7 @@ object FormDiscImage: TFormDiscImage
       OnClick = WriteImageButtonClick
     end
     object ReadSingleBlockButton: TButton
-      Left = 16
+      Left = 11
       Top = 91
       Width = 160
       Height = 25
@@ -268,7 +269,7 @@ object FormDiscImage: TFormDiscImage
       OnClick = ReadSingleBlockButtonClick
     end
     object WriteSingleBlockButton: TButton
-      Left = 186
+      Left = 182
       Top = 91
       Width = 160
       Height = 25
@@ -295,12 +296,13 @@ object FormDiscImage: TFormDiscImage
       OnClick = ReadImageButtonClick
     end
     object UpdateCurBlockEditCheckBox: TCheckBox
-      Left = 13
-      Top = 38
+      Left = 11
+      Top = 42
       Width = 122
       Height = 17
       Caption = 'Track current  block'
       TabOrder = 10
+      OnClick = UpdateCurBlockEditCheckBoxClick
     end
     object BlockPerTransferEdit: TEdit
       Left = 229
@@ -333,11 +335,11 @@ object FormDiscImage: TFormDiscImage
       Caption = 'Repeat:'
     end
     object Label5: TLabel
-      Left = 319
-      Top = 24
-      Width = 64
+      Left = 299
+      Top = 20
+      Width = 40
       Height = 13
-      Caption = 'Test pattern:'
+      Caption = 'Pattern:'
     end
     object SelftestWordcountEdit: TEdit
       Left = 160
@@ -373,7 +375,7 @@ object FormDiscImage: TFormDiscImage
       TabOrder = 3
       Text = '1'
     end
-    object TestRLECompressionCheckBox: TCheckBox
+    object SelftestRLECompressionCheckBox: TCheckBox
       Left = 102
       Top = 44
       Width = 135
@@ -384,20 +386,31 @@ object FormDiscImage: TFormDiscImage
       TabOrder = 4
     end
     object SelftestPatternComboBox: TComboBox
-      Left = 384
-      Top = 20
-      Width = 131
+      Left = 342
+      Top = 18
+      Width = 173
       Height = 21
       Style = csDropDownList
-      ItemIndex = 3
+      ItemIndex = 2
       TabOrder = 5
-      Text = 'count up'
+      Text = 'random with constant dword block'
       Items.Strings = (
         'random'
-        'random with constant block'
+        'random with constant word block'
+        'random with constant dword block'
         'constant data, max RLE block len'
         'count up'
         'count down from 177777')
+    end
+    object SelftestRandomWordCountCheckBox: TCheckBox
+      Left = 251
+      Top = 44
+      Width = 122
+      Height = 17
+      Caption = 'Random word count'
+      Checked = True
+      State = cbChecked
+      TabOrder = 6
     end
   end
   object GroupBox4: TGroupBox

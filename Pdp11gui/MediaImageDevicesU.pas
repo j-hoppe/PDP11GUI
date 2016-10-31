@@ -925,7 +925,7 @@ constructor TMediaImage_DiscDevice_Robotron_K5502.Create ;
     Name := 'K5502_14' ;
     CylinderCount := 588 ; // 561+27
     HeadCount := 14 ;
-    SectorCount := 34 ; // 32+2
+    SectorCount := 32 ; // 32+2
     BlockCount := CylinderCount * HeadCount * SectorCount ;
     MultiBlockCount := SectorCount ; // ein Multiblock = 1 Track
     assert(MultiBlockCount * BlockSize <= 32768) ;

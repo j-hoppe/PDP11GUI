@@ -118,7 +118,7 @@ type
       LoadDriverButton: TButton; 
       Label7: TLabel; 
       SelfTestRepeatCountEdit: TEdit; 
-      TestRLECompressionCheckBox: TCheckBox; 
+      SelftestRLECompressionCheckBox: TCheckBox; 
       GroupBox4: TGroupBox; 
       DriveInfoMemo: TMemo; 
       DriveInfoLabel: TLabel; 
@@ -156,6 +156,7 @@ type
       DriverInvalidateButton: TButton; 
       SaveMetaInfoButton: TButton; 
       SaveDiskMetaInfoDialog: TSaveDialog; 
+      SelftestRandomWordCountCheckBox: TCheckBox; 
       procedure ClearImageButtonClick(Sender: TObject); 
       procedure LoadImageFileButtonClick(Sender: TObject); 
       procedure SaveImageButtonClick(Sender: TObject); 
@@ -185,6 +186,7 @@ type
       procedure DriverStopButtonClick(Sender: TObject); 
       procedure DriverInvalidateButtonClick(Sender: TObject); 
       procedure SaveMetaInfoButtonClick(Sender: TObject); 
+      procedure UpdateCurBlockEditCheckBoxClick(Sender: TObject);
     private 
       { Private-Deklarationen }
       procedure FormAfterShow(Sender: TObject); 
@@ -247,7 +249,7 @@ type
 
       procedure setDeviceForSelectedController(aDeviceName:string) ; 
 
-      procedure UnibusResetAndOpenDisc ;  // Treiber laden, Geometrie einstellen
+      procedure Pdp11ResetAndOpenDisc ;  // Treiber laden, Geometrie einstellen
 
       // Controller reset und Media-Info aus drive abfragen
       procedure ResetUnibusAndDrive ; 
@@ -256,7 +258,7 @@ type
       function ReadMultiBlock(aStartBlockNr: integer; blockcount: integer; check_only: boolean): integer ; 
       function WriteMultiBlock(aStartBlockNr: integer; blocksToWrite: integer): integer ; 
 
-      procedure Selftest(wordcount: integer; testpattern:integer) ; 
+      procedure Selftest(wordcount: integer; randomWordcount: boolean ; testpattern:integer) ; 
 
       // das Image aus dem RL02 lesen nach "ImageBuffer"
       // ab bestimmtem block
@@ -303,7 +305,7 @@ procedure TFormDiscImage.FormCreate(Sender: TObject);
     RestZeit := TRestZeit.Create ; 
     SerialXfer.OnStatusChange := SerialXferStatusChange ; 
 
-    // Auswahlliste aus Defintion
+    // Auswahlliste aus Definition
     ControllerComboBox.Clear ; 
     for i := 0 to TheControllerList.Count - 1 do 
       ControllerComboBox.Items.Add(TheControllerList.get(i).name) ; 
@@ -316,6 +318,7 @@ procedure TFormDiscImage.FormCreate(Sender: TObject);
 
     UpdateDisplay ; 
 
+    TheRegistry.Load(UpdateCurBlockEditCheckBox) ; 
     TheRegistry.Load(StopOnErrorCheckBox) ; 
     TheRegistry.Load(ProtectVendorAreaCheckBox) ; 
 
@@ -539,11 +542,13 @@ procedure TFormDiscImage.setDeviceForSelectedController(aDeviceName:string) ;
     SaveDiskMetaInfoDialog.Filter := s ; 
 
     MediaImageBuffer.LinkToDevice(selectedDevice); 
-    // bei MSCP kommt das nochmal mit anderne Grössendaten!
+    // bei MSCP kommt das nochmal mit anderen Grössendaten!
     ClearImageBuffer ; 
 
     BlockPerTransferEdit.Text := IntToStr(selectedDevice.MultiBlockCount) ; 
     BlockNrEdit.Text := '0' ; 
+
+    BadBlockList.Init(selectedDevice.blockcount, BadBlockListStringGrid) ; 
   end{ "procedure TFormDiscImage.setDeviceForSelectedController" } ; 
 
 
@@ -720,97 +725,109 @@ procedure TFormDiscImage.UpdateDisplay ;
     captionmsg := '' ; 
     case DriverState of 
       diDriver_Init: begin 
-        SelftestButton.Enabled := false ; 
-        DriverInvalidateButton.Enabled := false ; 
-        DriverStopButton.Enabled := false ; 
-        SelftestWordcountEdit.Enabled := false ; 
-        SelfTestRepeatCountEdit.Enabled := false ; 
-        TestRLECompressionCheckBox.Enabled := false ; 
-        captionmsg := getDriverStateAsText(DriverState) ; 
-      end ; 
-      diDriver_Compiling: begin 
-        SelftestButton.Enabled := false ; 
-        SelftestWordcountEdit.Enabled := false ; 
-        SelfTestRepeatCountEdit.Enabled := false ; 
-        TestRLECompressionCheckBox.Enabled := false ; 
-        captionmsg := getDriverStateAsText(DriverState) ; 
-      end ; 
+        DriverInvalidateButton.Enabled := false ;
+        DriverStopButton.Enabled := false ;
+        SelftestButton.Enabled := false ;
+        SelftestWordcountEdit.Enabled := false ;
+        SelfTestRepeatCountEdit.Enabled := false ;
+        SelftestRLECompressionCheckBox.Enabled := false ;
+        SelftestRandomWordCountCheckBox.Enabled := false ;
+        SelftestPatternComboBox.Enabled := false ;
+        captionmsg := getDriverStateAsText(DriverState) ;
+      end ;
+      diDriver_Compiling: begin
+        SelftestButton.Enabled := false ;
+        SelftestWordcountEdit.Enabled := false ;
+        SelfTestRepeatCountEdit.Enabled := false ;
+        SelftestRLECompressionCheckBox.Enabled := false ;
+        SelftestRandomWordCountCheckBox.Enabled := false ;
+        SelftestPatternComboBox.Enabled := false ;
+        captionmsg := getDriverStateAsText(DriverState) ;
+      end ;
       diDriver_Loading:begin //driver loaded, but not started
-        captionmsg := getDriverStateAsText(DriverState) ; 
-        SelftestButton.Enabled := false ; 
-        SelftestWordcountEdit.Enabled := false ; 
-        SelfTestRepeatCountEdit.Enabled := false ; 
-        TestRLECompressionCheckBox.Enabled := false ; 
-        captionmsg := getDriverStateAsText(DriverState) ; 
-      end ; 
-      diDriver_Loaded: begin 
-        DriverStopButton.Enabled := false ; 
-        DriverInvalidateButton.Enabled := true ; 
-        SelftestWordcountEdit.Enabled := false ; 
-        SelfTestRepeatCountEdit.Enabled := false ; 
-        TestRLECompressionCheckBox.Enabled := false ; 
-        captionmsg := getDriverStateAsText(DriverState) ; 
-      end ; 
-      diDriver_Execute, 
-      diDriver_UserStop, 
-      diDriver_Error: 
-        begin 
-          DriverStopButton.Enabled := true ; 
-          DriverInvalidateButton.Enabled := false ; 
-          SelftestButton.Enabled := true ; 
-          SelftestWordcountEdit.Enabled := true ; 
-          SelfTestRepeatCountEdit.Enabled := true ; 
-          TestRLECompressionCheckBox.Enabled := true ; 
-          captionmsg := getDriverStateAsText(DriverState) ; 
-        end ; 
-      diDriver_Execute_Selftest, 
-      diDriver_Execute_GetDriveInfo, 
-      diDriver_Execute_Read, 
-      diDriver_Execute_Check, 
-      diDriver_Execute_Write: begin 
-        SelftestButton.Enabled := false ; 
-        DriverInvalidateButton.Enabled := false ; 
-        SelftestWordcountEdit.Enabled := false ; 
-        SelfTestRepeatCountEdit.Enabled := false ; 
-        TestRLECompressionCheckBox.Enabled := false ; 
-        captionmsg := getDriverStateAsText(DriverState) ; 
-      end; 
-    end { "case DriverState" } ; 
-    DriverInfoLabel.Caption := assembleCaption(captionmsg, DriverStateInfo) ; 
+        captionmsg := getDriverStateAsText(DriverState) ;
+        SelftestButton.Enabled := false ;
+        SelftestWordcountEdit.Enabled := false ;
+        SelfTestRepeatCountEdit.Enabled := false ;
+        SelftestRLECompressionCheckBox.Enabled := false ;
+        SelftestRandomWordCountCheckBox.Enabled := false ;
+        SelftestPatternComboBox.Enabled := false ;
+        captionmsg := getDriverStateAsText(DriverState) ;
+      end ;
+      diDriver_Loaded: begin
+        DriverStopButton.Enabled := false ;
+        DriverInvalidateButton.Enabled := true ;
+        SelftestWordcountEdit.Enabled := false ;
+        SelfTestRepeatCountEdit.Enabled := false ;
+        SelftestRLECompressionCheckBox.Enabled := false ;
+        SelftestRandomWordCountCheckBox.Enabled := false ;
+        SelftestPatternComboBox.Enabled := false ;
+        captionmsg := getDriverStateAsText(DriverState) ;
+      end ;
+      diDriver_Execute,
+      diDriver_UserStop,
+      diDriver_Error:
+        begin
+          DriverStopButton.Enabled := true ;
+          DriverInvalidateButton.Enabled := false ;
+          SelftestButton.Enabled := true ;
+          SelftestWordcountEdit.Enabled := true ;
+          SelfTestRepeatCountEdit.Enabled := true ;
+          SelftestRLECompressionCheckBox.Enabled := true ;
+          SelftestRandomWordCountCheckBox.Enabled := true ;
+        SelftestPatternComboBox.Enabled := true ;
+          captionmsg := getDriverStateAsText(DriverState) ;
+        end ;
+      diDriver_Execute_Selftest,
+      diDriver_Execute_GetDriveInfo,
+      diDriver_Execute_Read,
+      diDriver_Execute_Check,
+      diDriver_Execute_Write: begin
+        SelftestButton.Enabled := false ;
+        DriverInvalidateButton.Enabled := false ;
+        SelftestWordcountEdit.Enabled := false ;
+        SelfTestRepeatCountEdit.Enabled := false ;
+        SelftestRLECompressionCheckBox.Enabled := false ;
+        SelftestRandomWordCountCheckBox.Enabled := false ;
+        SelftestPatternComboBox.Enabled := false ;
+        captionmsg := getDriverStateAsText(DriverState) ;
+      end;
+    end { "case DriverState" } ;
+    DriverInfoLabel.Caption := assembleCaption(captionmsg, DriverStateInfo) ;
 
     // Controls nur für File
-    captionmsg := '' ; 
-    case ImageFileState of 
+    captionmsg := '' ;
+    case ImageFileState of
       diImageFile_Init: begin // Grösse unklar
-        ClearImageButton.Enabled := false ; 
-        LoadImageFileButton.Enabled := false ; 
-        SaveImageButton.Enabled := false ; 
-        SaveMetaInfoButton.Enabled := false ; 
-        OverlayFileButton.Enabled := false ; 
-        captionmsg := getImageFileStateAsText(ImageFileState) ; 
-        MetainformationGroupBox.Visible := false ; 
-      end; 
-      diImageFile_Cleared: begin 
+        ClearImageButton.Enabled := false ;
+        LoadImageFileButton.Enabled := false ;
+        SaveImageButton.Enabled := false ;
+        SaveMetaInfoButton.Enabled := false ;
+        OverlayFileButton.Enabled := false ;
+        captionmsg := getImageFileStateAsText(ImageFileState) ;
+        MetainformationGroupBox.Visible := false ;
+      end;
+      diImageFile_Cleared: begin
         // image leer: nur laden + overlay erlauben
-        ClearImageButton.Enabled := false ; 
-        LoadImageFileButton.Enabled := true ; 
-        SaveImageButton.Enabled := true ; 
-        SaveMetaInfoButton.Enabled := true ; 
-        OverlayFileButton.Enabled := true ; 
-        captionmsg := getImageFileStateAsText(ImageFileState) ; 
-        MetainformationGroupBox.Visible := true ; 
-        ReadBadBlocksFromBadSectorFileButton.Enabled := false ; 
-        WriteBadBlocksToBadSectorFileButton.Enabled := false ; 
-        MediaSerialNumberEdit.Enabled := false ; 
-      end{ "case ImageFileState of diImageFile_Cleared:" } ; 
-      diImageFile_Loaded: begin 
+        ClearImageButton.Enabled := false ;
+        LoadImageFileButton.Enabled := true ;
+        SaveImageButton.Enabled := true ;
+        SaveMetaInfoButton.Enabled := true ;
+        OverlayFileButton.Enabled := true ;
+        captionmsg := getImageFileStateAsText(ImageFileState) ;
+        MetainformationGroupBox.Visible := true ;
+        ReadBadBlocksFromBadSectorFileButton.Enabled := false ;
+        WriteBadBlocksToBadSectorFileButton.Enabled := false ;
+        MediaSerialNumberEdit.Enabled := false ;
+      end{ "case ImageFileState of diImageFile_Cleared:" } ;
+      diImageFile_Loaded: begin
         // wenn File geladen: Löschen und Ändern erlauben.
-        ClearImageButton.Enabled := true ; 
-        LoadImageFileButton.Enabled := true ; 
-        SaveImageButton.Enabled := true  ; 
-        SaveMetaInfoButton.Enabled := true  ; 
-        OverlayFileButton.Enabled := true ; 
-        captionmsg := getImageFileStateAsText(ImageFileState) ; 
+        ClearImageButton.Enabled := true ;
+        LoadImageFileButton.Enabled := true ;
+        SaveImageButton.Enabled := true  ;
+        SaveMetaInfoButton.Enabled := true  ;
+        OverlayFileButton.Enabled := true ;
+        captionmsg := getImageFileStateAsText(ImageFileState) ;
         MetainformationGroupBox.Visible := true ; 
         ReadBadBlocksFromBadSectorFileButton.Enabled := true ; 
         WriteBadBlocksToBadSectorFileButton.Enabled := true ; 
@@ -865,8 +882,9 @@ procedure TFormDiscImage.UpdateDisplay ;
     // Lesen möglich, wenn DiscOpen, Driver geladen
     if (DeviceState = diDevice_Open) 
             and (DriverState >= diDriver_Loaded) then begin 
-      BlockNrLabel.Caption := Format('Current %s:', [selectedController.dataBlockName]) ; 
-      BlocksPerTransferLabel.Caption := Format('%s/transfer:', [selectedController.dataBlockName]) ; 
+      BlockNrLabel.Caption := Format('Next %s:', [selectedController.dataBlockName]) ; 
+      UpdateCurBlockEditCheckBox.Caption := Format('Track "next %s"', [selectedController.dataBlockName]) ; 
+      BlocksPerTransferLabel.Caption := Format('%ss/transfer:', [selectedController.dataBlockName]) ; 
       ReadImageButton.Caption := Format('Read all from ''%s nr'' to end', [selectedController.dataBlockName]) ; 
       ReadSingleBlockButton.Caption := Format('Read single %s ''%s nr''', [selectedController.dataBlockName, selectedController.dataBlockName]) ; 
       WriteImageButton.Caption := Format('Write all from ''%s nr'' to end', [selectedController.dataBlockName]) ; 
@@ -1005,22 +1023,23 @@ procedure TFormDiscImage.LoadDriver ;
 
 
 // start the driver, by executing "GO <start address>"
-procedure TFormDiscImage.StartDriver ; 
-  var 
-    pdp11ProcAddr: TMemoryAddress; 
-  begin 
+// then discard any serial output ("(Program)" message on 11/44 v3.40)
+procedure TFormDiscImage.StartDriver ;
+  var
+    pdp11ProcAddr: TMemoryAddress;
+  begin
     // einziger Einsprung in den Treiber
-    pdp11ProcAddr.mat := matVirtual ; 
-    pdp11ProcAddr.val := _10000 ; 
+    pdp11ProcAddr.mat := matVirtual ;
+    pdp11ProcAddr.val := _10000 ;
 
     // Zielprocedur starten
     // Startadresse des Drivers in der ExecuteForm eintragen
-    FormMain.FormExecute.StartPCEdit.Text := Addr2OctalStr(pdp11ProcAddr) ; 
+    FormMain.FormExecute.StartPCEdit.Text := Addr2OctalStr(pdp11ProcAddr) ;
     // starten
-    Application.ProcessMessages ; 
+    Application.ProcessMessages ;
 
     //  cfActionResetMaschineAndStartCpu wird von allen Maschinen unterstützt
-    FormMain.FormExecute.doResetMachineAndSetPCandStart ; 
+    FormMain.FormExecute.doResetMachineAndSetPCandStart ;
 //    else begin
     // START CODE WITHOUT HARD RESET
     // Reset may wipe out any previous device initialization!
@@ -1032,22 +1051,26 @@ procedure TFormDiscImage.StartDriver ;
 //        sleep(350) ;
 //      end;
     //  end ;
-    // "350" nötig für 11/44
+    // "350" nötig für 11/44, "documented" firmware
     // "250" nötig für 11/23: Sichtbarkeit der Startanweisung in ODT
-    WaitAndProcessMessages(350) ; 
+
+//    WaitAndProcessMessages(350) ;
+    // 11/44, v.340: prints ("Program")
+    FormMain.SerialIoHub.DiscardPhysicalInput(500) ;
+
 
     // Driver now running, and Bus reset done
 
-    setDriverState(diDriver_Execute, '') ; 
-  end{ "procedure TFormDiscImage.StartDriver" } ; 
+    setDriverState(diDriver_Execute, '') ;
+  end{ "procedure TFormDiscImage.StartDriver" } ;
 
 // stop the driver, by sending him a STOP opcode
 // later to be replaced by a "Jump to Monitor" (165020 for M9312 driver
-procedure TFormDiscImage.StopDriver ; 
-  var 
-    opcode: word ; 
-    monitor_entryaddress_val: dword ; 
-  begin 
+procedure TFormDiscImage.StopDriver ;
+  var
+    opcode: word ;
+    monitor_entryaddress_val: dword ;
+  begin
     opcode := SerialTransferDriver_ophalt ; 
     // HALT has one argument.
     // if 0: execute HALT
@@ -1080,7 +1103,11 @@ procedure TFormDiscImage.LoadDriverButtonClick(Sender: TObject);
 // driver will be reloaded on next operation
 procedure TFormDiscImage.DriverInvalidateButtonClick(Sender: TObject); 
   begin 
-    setDriverState(diDriver_Init); 
+    setDeviceState(diDevice_ReadyToOpenWithDevice) ; 
+    setDriverState(diDriver_Init) ; 
+    setImageFileState(diImageFile_Init) ; 
+    // same as after fresh start, but controller/drive select remains
+
     UpdateDisplay ; 
   end; 
 
@@ -1093,7 +1120,7 @@ procedure TFormDiscImage.DriverStopButtonClick(Sender: TObject);
 
 procedure TFormDiscImage.OpenDeviceButtonClick(Sender: TObject); 
   begin 
-    UnibusResetAndOpenDisc ; 
+    Pdp11ResetAndOpenDisc ;
   end; 
 
 // Drive reset.
@@ -1148,7 +1175,7 @@ procedure TFormDiscImage.ResetUnibusAndDrive ;
           if errorloc <> 0 then begin // dump error words
             setDriverState(diDriver_Error, Format('error location = %s, error info = %s!', 
                     [Dword2OctalStr(errorloc,0), 
-                    SerialXfer.DataBlockText(SerialXfer.XmitBlock0Data)])) ; 
+                    SerialXfer.WordArrayAsText(SerialXfer.XmitBlock0Data)])) ; 
             // Fehlertext landet in DriverStateInfo
             Exit ; 
           end; 
@@ -1196,7 +1223,7 @@ procedure TFormDiscImage.ResetUnibusAndDrive ;
 // check_only: wenn true, werden die gelesenen Daten nicht übertragen,
 //  dient zum bad sector scan.
 //result: anzahl der gelesenen Blöcke
-function TFormDiscImage.ReadMultiBlock(aStartBlockNr: integer ; blockcount: integer ;
+function TFormDiscImage.ReadMultiBlock(aStartBlockNr: integer ; blockcount: integer ; 
         check_only: boolean): integer ; 
   var 
     pdp11proctimeout_ms: integer ; // maximale laufzeit des Zugriffs in ms
@@ -1245,14 +1272,19 @@ function TFormDiscImage.ReadMultiBlock(aStartBlockNr: integer ; blockcount: inte
         if DriverState = diDriver_UserStop then Exit ; 
 
         // opcode muss 0 sein, wenn OK
-        errorloc := opcode ;
-        // if aStartBlockNr > 100 then errorloc := 438 ; // Simualte read error: octal 666
+        errorloc := opcode ; 
 
+{$ifdef DEBUG}
+        // Simulate read error: octal 666
+//        if aStartBlockNr >= 100 then begin errorloc := 438 ;
+//           SetLength(SerialXfer.XmitBlock0Data, 4) ;
+//         end ;
+{$endif}
 
         if errorloc <> 0 then begin // dump error words
           setDriverState(diDriver_Error, Format('error location = %s, error info = %s!', 
                   [Dword2OctalStr(errorloc,0), 
-                  SerialXfer.DataBlockText(SerialXfer.XmitBlock0Data)])) ; 
+                  SerialXfer.WordArrayAsText(SerialXfer.XmitBlock0Data)])) ; 
           // Fehlertext landet in DriverStateInfo
           Exit ; 
         end; 
@@ -1285,7 +1317,7 @@ function TFormDiscImage.ReadMultiBlock(aStartBlockNr: integer ; blockcount: inte
 
     finally 
       if UpdateCurBlockEditCheckBox.Checked then begin 
-        BlockNrEdit.Text := IntToStr(aStartBlockNr + blocksRead) ; 
+        BlockNrEdit.Text := IntToStr(aStartBlockNr + blocksRead) ; // next unread block
 //OutputDebugString('BlockNrEdit.Text := %d + %d = %s', [aStartBlockNr, blocksRead,BlockNrEdit.Text]) ;
       end; 
 
@@ -1323,7 +1355,7 @@ procedure TFormDiscImage.ReadSingleBlockButtonClick(Sender: TObject);
 // - oder Geometry selber setzen
 // da Geometry klar: Buffergrössen setzen
 
-procedure TFormDiscImage.UnibusResetAndOpenDisc ; 
+procedure TFormDiscImage.Pdp11ResetAndOpenDisc ;
   begin 
     // abgeleiteten Namen verwenden
 
@@ -1362,11 +1394,14 @@ procedure TFormDiscImage.UnibusResetAndOpenDisc ;
     MediaImageBuffer.LinkToDevice(selectedDevice) ; 
 //    DriverStateInfoLabel.Caption := Format('%s: Init', [DeviceSubTypeName]) ;
 
-    BadBlockList.Init(selectedDevice.blockcount, BadBlockListStringGrid) ; 
+    // always sync with file clear/load
+    // BadBlockList.Init(selectedDevice.blockcount, BadBlockListStringGrid) ;
+
 
     BlockNrEdit.Text := '0' ; 
 
     setDeviceState(diDevice_Open) ; 
+
   end{ "procedure TFormDiscImage.UnibusResetAndOpenDisc" } ; 
 
 
@@ -1380,7 +1415,7 @@ procedure TFormDiscImage.ReadImage(startblocknr: integer; check_only: boolean) ;
 // liest einzeln und unoptimiert alle Sectoren des aktuellen Cylinder/Head.
 // dient dazu, den bad block in der track zu finden
 // DriverErrorTxt: Info des Drivers über Fehlerposition.
-  procedure ReadTrackBlocks(startblocknr: integer ; SectorCount: integer; errorStop: boolean ;  var DriverErrorTxt:string);
+  procedure ReadTrackBlocks(startblocknr: integer ; SectorCount: integer; errorStop: boolean ;  var DriverErrorTxt:string); 
     var BlockNr: integer ; 
       retryCount: integer ; 
       lastDriverErrorTxt: string ; 
@@ -1398,13 +1433,13 @@ procedure TFormDiscImage.ReadImage(startblocknr: integer; check_only: boolean) ;
             Exit ; 
           end; 
           ReadMultiBlock(BlockNr, 1, check_only); // immer nur einen sector lesen
-          if DriverState = diDriver_UserStop then begin
-            Log('ReadTrackBlocks() aborted');
+          if DriverState = diDriver_UserStop then begin 
+            Log('ReadTrackBlocks() aborted'); 
             Exit ; 
-          end;
+          end; 
 
           if DriverState = diDriver_Error then // merke letzten Fehlercode des Treibers
-            lastDriverErrorTxt := DriverStateInfo ;
+            lastDriverErrorTxt := DriverStateInfo ; 
 
           inc(retryCount) ; 
         until (DriverState <> diDriver_Error) 
@@ -1413,11 +1448,11 @@ procedure TFormDiscImage.ReadImage(startblocknr: integer; check_only: boolean) ;
           registerBadBlock(BlockNr, bbsScan, Format('FAILURE reading sector after %d retries: %s', 
                   [retryCount, lastDriverErrorTxt])) ; 
           DriverErrorTxt := lastDriverErrorTxt ; // Fehlerrückgabe
-          if errorStop then
-            Exit ;
+          if errorStop then 
+            Exit ; 
         end else if retryCount >  1 then 
           registerBadBlock(BlockNr, bbsScan, Format('OK reading sector after %d retries: %s', 
-                  [retryCount, lastDriverErrorTxt])) ;
+                  [retryCount, lastDriverErrorTxt])) ; 
 
         // trotz fehler weiter lesen
         inc(BlockNr) ; 
@@ -1479,7 +1514,7 @@ procedure TFormDiscImage.ReadImage(startblocknr: integer; check_only: boolean) ;
         // Beim Lesen des Tracks wurde ein Fehler gesehen,
         // lies den track jetzt sectorweise, um den bad block zu finden.
         // DiscGeometry ist gültig.
-        ReadTrackBlocks(BlockNr, m, StopOnErrorCheckBox.Checked, DriverErrorTxt) ;
+        ReadTrackBlocks(BlockNr, m, StopOnErrorCheckBox.Checked, DriverErrorTxt) ; 
 
         // Unrecoverable error? TehndiDriver_Error set again.
         if (DriverState = diDriver_Error) and StopOnErrorCheckBox.Checked then begin 
@@ -1607,7 +1642,7 @@ function TFormDiscImage.WriteMultiBlock(aStartBlockNr: integer; blocksToWrite: i
         if errorloc <> 0 then begin // dump error words
           setDriverState(diDriver_Error, Format('error location = %s, error info = %s!', 
                   [Dword2OctalStr(errorloc,0), 
-                  SerialXfer.DataBlockText(SerialXfer.XmitBlock0Data)])) ; 
+                  SerialXfer.WordArrayAsText(SerialXfer.XmitBlock0Data)])) ; 
           // Fehlertext landet in DriverStateInfo
           Exit ; 
         end; 
@@ -1621,7 +1656,7 @@ function TFormDiscImage.WriteMultiBlock(aStartBlockNr: integer; blocksToWrite: i
 
     finally 
       if UpdateCurBlockEditCheckBox.Checked then 
-        BlockNrEdit.Text := IntToStr(aStartBlockNr) ; 
+        BlockNrEdit.Text := IntToStr(aStartBlockNr+ blocksWritten) ; // next unwritten block
 
       if DriverState in [diDriver_Error, diDriver_UserStop] then 
         Log('WriteMultiBlock() aborted') 
@@ -1650,7 +1685,7 @@ procedure TFormDiscImage.WriteImage(startblocknr: integer) ;
 
 // schreibt einzeln und unoptimiert alle Sectoren des aktuellen Cylinder/Head.
 // dient dazu, den bad block in der track zu finden
-  procedure WriteTrackBlocks(startblocknr: integer ; errorStop: boolean ;  SectorCount: integer);
+  procedure WriteTrackBlocks(startblocknr: integer ; errorStop: boolean ;  SectorCount: integer); 
     var BlockNr: integer ; 
       lastErrorTxt: string ; 
     begin 
@@ -1666,11 +1701,11 @@ procedure TFormDiscImage.WriteImage(startblocknr: integer) ;
           Log('WriteTrackBlocks() aborted'); 
           Exit ; 
         end; 
-        if DriverState = diDriver_Error then begin
+        if DriverState = diDriver_Error then begin 
           lastErrorTxt := DriverStateInfo ; // merke letzten Fehlercode des Treibers
-          registerBadBlock(BlockNr, bbsScan, Format('FAILURE writing disc: %s', [lastErrorTxt]));
-          if errorStop then
-            Exit ;
+          registerBadBlock(BlockNr, bbsScan, Format('FAILURE writing disc: %s', [lastErrorTxt])); 
+          if errorStop then 
+            Exit ; 
           // trotz fehler weiter lesen
         end; 
         inc(BlockNr) ; 
@@ -1721,7 +1756,7 @@ procedure TFormDiscImage.WriteImage(startblocknr: integer) ;
         // Beim Lesen des tracks wurde ein Fehler gesehen,
         // lies den track jetzt sectorweise, um den bad block zu finden.
         // DiscGeometry ist gültig.
-        WriteTrackBlocks(BlockNr, StopOnErrorCheckBox.Checked, m) ;
+        WriteTrackBlocks(BlockNr, StopOnErrorCheckBox.Checked, m) ; 
         if StopOnErrorCheckBox.Checked then begin 
           Log('Error occured: WriteImage() terminated'); 
           // durch repeat kann Fehlerstatus weg sein, reproduziere ihn,
@@ -1770,10 +1805,12 @@ procedure TFormDiscImage.WriteImageStream(startblocknr: integer) ;
 
 // wordcount: Datenmenge, die zum Test übertragen wird
 // testpattern: enum
-procedure TFormDiscImage.Selftest(wordcount: integer; testpattern:integer) ; 
+procedure TFormDiscImage.Selftest(wordcount: integer; randomWordcount: boolean ; testpattern:integer) ; 
   begin 
     try 
       setDriverState(diDriver_Execute_Selftest) ; 
+      if randomWordcount then 
+        wordcount := Random(wordcount) ; 
       SerialXfer.Selftest(wordcount, testpattern) ; 
       setDriverState(diDriver_Execute, 'Selftest OK') ; 
     except on E: Exception do begin 
@@ -1781,13 +1818,13 @@ procedure TFormDiscImage.Selftest(wordcount: integer; testpattern:integer) ;
         raise ; 
       end; 
     end; 
-  end; 
+  end{ "procedure TFormDiscImage.Selftest" } ; 
 
 
 procedure TFormDiscImage.SelftestButtonClick(Sender: TObject); 
   var i, n: integer ; 
   begin 
-    SerialXfer.EnableRLECompression := TestRLECompressionCheckBox.Checked ; 
+    SerialXfer.EnableRLECompression := SelftestRLECompressionCheckBox.Checked ; 
     n := StrToInt(SelfTestRepeatCountEdit.Text); 
     // testpattern: siehe SerialXfer.Selftest()
     if SelftestPatternComboBox.ItemIndex < 0 then 
@@ -1800,7 +1837,7 @@ procedure TFormDiscImage.SelftestButtonClick(Sender: TObject);
 //    setDeviceState(diDevice_SelectDevice);
 
     for i := 0 to n-1 do 
-      Selftest(StrToInt(SelftestWordcountEdit.Text), SelftestPatternComboBox.ItemIndex) ; 
+      Selftest(StrToInt(SelftestWordcountEdit.Text), SelftestRandomWordCountCheckBox.Checked, SelftestPatternComboBox.ItemIndex) ; 
   end{ "procedure TFormDiscImage.SelftestButtonClick" } ; 
 
 
@@ -1822,8 +1859,10 @@ procedure TFormDiscImage.ClearImageButtonClick(Sender: TObject);
 // gleichzeitig BadBlockList als <filename>.meta schreiben
 procedure TFormDiscImage.SaveImageBuffer(filename: string) ; 
   begin 
-    MediaImageBuffer.SaveBuffer(filename) ; 
+    MediaImageBuffer.SaveBuffer(filename) ;
+    BadBlockList.NextBlockToProcess := StrToInt(BlockNrEdit.Text) ;
     BadBlockList.SaveToFile(filename+'_meta') ;
+
     setImageFileState(diImageFile_Saved, '"'+filename+'"'); 
   end; 
 
@@ -1835,8 +1874,10 @@ procedure TFormDiscImage.LoadImageBuffer(filename: string; overlay: boolean = fa
     BadBlockList.Clear ; 
     metafilename := filename+ '_meta' ; 
     if FileExists(metafilename) then begin 
-      BadBlockList.LoadFromFile(metafilename); 
-    end; 
+      BadBlockList.LoadFromFile(metafilename);
+      if UpdateCurBlockEditCheckBox.Checked then
+        BlockNrEdit.Text := IntToStr(BadBlockList.NextBlockToProcess) ;
+    end;
 
     if overlay then 
       setImageFileState(diImageFile_Changed, 'overlayed with "' + filename + '"') 
@@ -1884,16 +1925,16 @@ procedure TFormDiscImage.OverlayFileButtonClick(Sender: TObject);
     OpenDiskImageOverlayDialog.InitialDir := ExtractFileDir(fname) ; 
     OpenDiskImageOverlayDialog.filename := '' ; 
     OpenDiskImageOverlayDialog.DefaultExt := ExtractFileExt(fname) ; 
-    if OpenDiskImageOverlayDialog.Execute then begin
-      LoadImageBuffer(OpenDiskImageOverlayDialog.filename, {overlay=} true) ;
-    end;
+    if OpenDiskImageOverlayDialog.Execute then begin 
+      LoadImageBuffer(OpenDiskImageOverlayDialog.filename, {overlay=} true) ; 
+    end; 
   end; 
 
 
 procedure TFormDiscImage.ProtectVendorAreaCheckBoxClick(Sender: TObject); 
   begin 
     TheRegistry.Save(ProtectVendorAreaCheckBox) ; 
-  end; 
+  end;
 
 
 procedure TFormDiscImage.SaveImageButtonClick(Sender: TObject); 
@@ -1917,9 +1958,10 @@ procedure TFormDiscImage.SaveMetaInfoButtonClick(Sender: TObject);
     SaveDiskMetaInfoDialog.InitialDir := ExtractFilePath(fname) ; 
     SaveDiskMetaInfoDialog.filename := fname ; 
 
-    if SaveDiskMetaInfoDialog.Execute then begin 
-      BadBlockList.SaveToFile(SaveDiskMetaInfoDialog.filename) ; 
-      TheRegistry.Save(RegistryKeyDiskMetaInfoFilename, SaveDiskMetaInfoDialog.filename) ;
+    if SaveDiskMetaInfoDialog.Execute then begin
+      BadBlockList.NextBlockToProcess := StrToInt(BlockNrEdit.Text) ;
+      BadBlockList.SaveToFile(SaveDiskMetaInfoDialog.filename) ;
+      TheRegistry.Save(RegistryKeyDiskMetaInfoFilename, SaveDiskMetaInfoDialog.filename) ; 
     end; 
   end; 
 
@@ -1980,6 +2022,12 @@ procedure TFormDiscImage.StopOnErrorCheckBoxClick(Sender: TObject);
     TheRegistry.Save(StopOnErrorCheckBox) ; 
   end; 
 
+procedure TFormDiscImage.UpdateCurBlockEditCheckBoxClick(Sender: TObject); 
+  begin 
+    TheRegistry.Save(UpdateCurBlockEditCheckBox) ; 
+  end; 
+
+
 //
 procedure TFormDiscImage.registerBadBlock(badblocknr: integer; source: TBadBlockSource ; info:string); 
   var 
@@ -1989,9 +2037,11 @@ procedure TFormDiscImage.registerBadBlock(badblocknr: integer; source: TBadBlock
   begin 
     // ergänze cylinder,head,sector
     if selectedDevice is TMediaImage_DiscDevice_Std then begin 
-      discdev :=  selectedDevice as TMediaImage_DiscDevice_Std ; 
+      discdev := selectedDevice as TMediaImage_DiscDevice_Std ; 
       discdev.BlockNr2DiscAddr(badblocknr, Cylinder, Head, Sector) ; 
       BadBlockList.registerBadBlock(badblocknr, Cylinder, Head, Sector, source, info) ; 
+      //     OptimizeAnyGridColWidths(Grid);
+
     end else begin 
       // tape or MSCP: register only bad block
       BadBlockList.registerBadBlock(badblocknr, -1, -1, -1, source, info) ; 

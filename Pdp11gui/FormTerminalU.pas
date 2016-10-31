@@ -68,6 +68,7 @@ type
       Showcontrolchars1: TMenuItem;
       Copyall1: TMenuItem;
       N2: TMenuItem;
+    Beep1: TMenuItem;
       procedure RichEdit1KeyPress(Sender: TObject; var Key: char);
       procedure RichEdit1KeyDown(Sender: TObject; var Key: Word;
               Shift: TShiftState);
@@ -84,6 +85,7 @@ type
       procedure Selectcolor1Click(Sender: TObject);
       procedure Showcontrolchars1Click(Sender: TObject);
       procedure Copyall1Click(Sender: TObject);
+    procedure Beep1Click(Sender: TObject);
     private
       { Private-Deklarationen }
       pending_newline: boolean ;
@@ -140,6 +142,7 @@ procedure TFormTerminal.FormShow(Sender: TObject);
   var s: string ;
   begin
     Showcontrolchars1.Checked := (TheRegistry.Load('TerminalShowControlChars', 0) <> 0) ;
+    Beep1.Checked := (TheRegistry.Load('TerminalBeep', 0) <> 0) ;
 
     s := TheRegistry.Load('TerminalFont', '') ;
     if s <> '' then begin
@@ -211,6 +214,12 @@ procedure TFormTerminal.Showcontrolchars1Click(Sender: TObject);
     TheRegistry.Save('TerminalShowControlChars', Showcontrolchars1.Checked) ;
   end;
 
+procedure TFormTerminal.Beep1Click(Sender: TObject);
+begin
+  Beep1.Checked := not Beep1.Checked ;
+    TheRegistry.Save('TerminalBeep', Beep1.Checked) ;
+end;
+
 procedure TFormTerminal.Clear ;
   begin
     pending_newline := false ;
@@ -255,6 +264,9 @@ procedure TFormTerminal.AppendText(outputstyle: TTerminalOutputStyle ; chars: st
           if TerminalSettings.TabStop > 0 then
             while (length(lastline) + length(s)) mod TerminalSettings.TabStop <> 0 do
               s := s + ' ' ;
+        end else if c = #7 then begin // ^G is Beep
+          if Beep1.Checked then
+            Beep ;
         end else if (TerminalSettings.Backspace <> #0) and (c = TerminalSettings.Backspace) then begin
           lastline := Copy(lastline, 1, length(lastline)-1) ;
           Lines[Lines.Count-1] := lastline ;

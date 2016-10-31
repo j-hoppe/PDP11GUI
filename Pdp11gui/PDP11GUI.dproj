@@ -52,11 +52,11 @@
         <Icon_MainIcon>PDP11GUI_Icon2.ico</Icon_MainIcon>
         <Manifest_File>None</Manifest_File>
         <VerInfo_AutoIncVersion>true</VerInfo_AutoIncVersion>
-        <VerInfo_MinorVer>47</VerInfo_MinorVer>
-        <VerInfo_Release>10</VerInfo_Release>
+        <VerInfo_MinorVer>48</VerInfo_MinorVer>
+        <VerInfo_Release>4</VerInfo_Release>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Build>2100</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=Jörg Hoppe;FileDescription=A graphical interface for PDP-11 system consoles;FileVersion=1.47.10.2100;InternalName=;LegalCopyright=(C) 2008-2015 by Joerg Hoppe, Goettingen, Germany;LegalTrademarks=;OriginalFilename=;ProductName=PDP11GUI;ProductVersion=1.45;Comments=Updates under http://www.retrocmp.com/tools/pdp11gui</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=Jörg Hoppe;FileDescription=A graphical interface for PDP-11 system consoles;FileVersion=1.48.4.2100;InternalName=;LegalCopyright=(C) 2008-2015 by Joerg Hoppe, Goettingen, Germany;LegalTrademarks=;OriginalFilename=;ProductName=PDP11GUI;ProductVersion=1.45;Comments=Updates under http://www.retrocmp.com/tools/pdp11gui</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_Namespace>Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;System;Xml;Data;Datasnap;Web;Soap;Winapi;$(DCC_Namespace)</DCC_Namespace>
         <DCC_RangeChecking>true</DCC_RangeChecking>
@@ -87,11 +87,12 @@
         <DCC_RangeChecking>True</DCC_RangeChecking>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
-        <VerInfo_MinorVer>48</VerInfo_MinorVer>
-        <VerInfo_Release>0</VerInfo_Release>
+        <VerInfo_AutoGenVersion>true</VerInfo_AutoGenVersion>
+        <VerInfo_AutoIncVersion>false</VerInfo_AutoIncVersion>
+        <VerInfo_Release>5</VerInfo_Release>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
         <VerInfo_Build>2024</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.48.0.2024;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.48.5.2024;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2)'!=''">
         <Version>7.0</Version>
@@ -101,11 +102,12 @@
         <DCC_Optimize>False</DCC_Optimize>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
-        <VerInfo_MinorVer>48</VerInfo_MinorVer>
-        <VerInfo_Release>0</VerInfo_Release>
+        <VerInfo_AutoGenVersion>true</VerInfo_AutoGenVersion>
+        <VerInfo_AutoIncVersion>false</VerInfo_AutoIncVersion>
+        <VerInfo_Release>5</VerInfo_Release>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
         <VerInfo_Build>2061</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.48.0.2061;InternalName=;LegalCopyright=Joerg Hoppe;LegalTrademarks=;OriginalFilename=;ProductName=PDP11GUI;ProductVersion=1.47.2;Comments=</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=;FileVersion=1.48.5.2061;InternalName=;LegalCopyright=Joerg Hoppe;LegalTrademarks=;OriginalFilename=;ProductName=PDP11GUI;ProductVersion=1.47.2;Comments=</VerInfo_Keys>
     </PropertyGroup>
     <ProjectExtensions>
         <Borland.Personality>Delphi.Personality.12</Borland.Personality>
@@ -123,7 +125,7 @@
                     <VersionInfo Name="MajorVer">1</VersionInfo>
                     <VersionInfo Name="MinorVer">45</VersionInfo>
                     <VersionInfo Name="Release">1</VersionInfo>
-                    <VersionInfo Name="Build">2160</VersionInfo>
+                    <VersionInfo Name="Build">2183</VersionInfo>
                     <VersionInfo Name="Debug">False</VersionInfo>
                     <VersionInfo Name="PreRelease">False</VersionInfo>
                     <VersionInfo Name="Special">False</VersionInfo>
@@ -135,7 +137,7 @@
                 <VersionInfoKeys>
                     <VersionInfoKeys Name="CompanyName">Jörg Hoppe</VersionInfoKeys>
                     <VersionInfoKeys Name="FileDescription">A graphical interface for PDP-11 system consoles</VersionInfoKeys>
-                    <VersionInfoKeys Name="FileVersion">1.45.1.2160</VersionInfoKeys>
+                    <VersionInfoKeys Name="FileVersion">1.45.1.2183</VersionInfoKeys>
                     <VersionInfoKeys Name="InternalName"/>
                     <VersionInfoKeys Name="LegalCopyright">(C) 2008-2014 by Joerg Hoppe, Goettingen, Germany</VersionInfoKeys>
                     <VersionInfoKeys Name="LegalTrademarks"/>

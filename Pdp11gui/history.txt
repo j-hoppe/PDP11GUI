@@ -2,6 +2,10 @@
 PDP11GUI Revision history:
 --------------------------
 
+2.11.2016   V.1.48.6
+            - Disk Image Read/Write: disk type "rm02/rm03" made no valid
+              file extension.
+31.10.2016  - published
 22.10.2016: V 1.48.5
                 - Disk Image Read/Write: after driver start, wait until
                   any serial output is discarded.

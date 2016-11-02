@@ -524,7 +524,7 @@ procedure TFormDiscImage.setDeviceForSelectedController(aDeviceName:string) ;
     // Disc subtype is file extension. replace space with '_'
     ext := LowerCase(aDeviceName) ; 
     for i := 1 to length(ext) do 
-      if ext[i] = ' ' then ext[i] := '_' ; 
+      if ext[i] in [' ', '\', '/', '?', '*', ':', '"', '<', '>', '|'] then ext[i] := '_' ;
 
     RegistryKeyDiskImageFilename := 'DiskImageFilename_' + ext ; 
     OpenDiskImageDialog.DefaultExt := ext ; 
